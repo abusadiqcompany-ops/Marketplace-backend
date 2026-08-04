@@ -1202,6 +1202,7 @@ async function startServer() {
     console.log('🗄️ MySQL database initialized');
   } catch (error) {
     console.error('❌ MySQL initialization failed:', error);
+    console.warn('⚠️ Continuing without database for now. API routes that require persistence will fail until DB is configured.');
   }
 
   const server = app.listen(PORT, HOST, () => {
