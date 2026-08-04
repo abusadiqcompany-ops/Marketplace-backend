@@ -5,10 +5,10 @@ export class Database {
     constructor() {
         this.initialized = false;
         this.pool = mysql.createPool({
-            host: process.env.DB_HOST || '${{RAILWAY_PRIVATE_DOMAIN}}',
+            host: process.env.DB_HOST || 'your-real-host',
             port: Number(process.env.DB_PORT || 3306),
             user: process.env.DB_USER || 'root',
-            password: process.env.DB_PASSWORD || '${{MYSQL_ROOT_PASSWORD}}',
+            password: process.env.DB_PASSWORD || 'SwAUtmIkfZxFlucDrSTUFzTrpqwvDpYZ',
             database: process.env.DB_NAME || 'railway',
             waitForConnections: true,
             connectionLimit: 10,
