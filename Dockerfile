@@ -42,8 +42,8 @@ ENV PORT=3001
 
 # Health check
 HEALTHCHECK --interval=30s --timeout=3s --start-period=5s --retries=3 \
-  CMD node -e "const http=require('http'); const port=process.env.PORT || 3002; const req=http.get({host:'127.0.0.1', port, path:'/health'}, (res)=>{ if (res.statusCode !== 200) process.exit(1); }); req.on('error', ()=>process.exit(1));"
-  EXPOSE 3002
+  CMD node -e "const http=require('http'); const port=process.env.PORT || 3001; const req=http.get({host:'127.0.0.1', port, path:'/health'}, (res)=>{ if (res.statusCode !== 200) process.exit(1); }); req.on('error', ()=>process.exit(1));"
+  EXPOSE 3001
 
 ENTRYPOINT ["/sbin/dumb-init", "--"]
 CMD ["node", "build-output/index.js"]
