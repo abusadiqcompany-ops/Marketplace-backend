@@ -29,6 +29,8 @@ const frontendOrigin = getFrontendUrl();
 const allowedOrigins = new Set([
   frontendOrigin,
   process.env.FRONTEND_URL,
+  'https://marketplace-frontend-git-main-musaf-technologies.vercel.app',
+  'https://marketplace-frontend-mu-two.vercel.app',
   'http://localhost:5173',
   'http://127.0.0.1:5173',
   'http://localhost:4173',
@@ -39,10 +41,13 @@ const allowedOrigins = new Set([
   'https://127.0.0.1:4173',
   ...(process.env.ALLOWED_ORIGINS?.split(',').filter(Boolean) || []),
 ]);
+const normalizeOrigin = (origin: string | undefined) => origin?.replace(/\/$/, '');
 const isAllowedOrigin = (origin: string | undefined) => {
   if (!origin) return true;
-  if (allowedOrigins.has(origin)) return true;
-  return /(?:^|\.)devtunnels\.ms$/i.test(origin) || /localhost|127\.0\.0\.1/i.test(origin);
+  const normalizedOrigin = normalizeOrigin(origin);
+  if (!normalizedOrigin) return true;
+  if (allowedOrigins.has(normalizedOrigin)) return true;
+  return /(?:^|\.)vercel\.app$/i.test(normalizedOrigin) || /(?:^|\.)devtunnels\.ms$/i.test(normalizedOrigin) || /localhost|127\.0\.0\.1/i.test(normalizedOrigin);
 };
 app.use(
   cors({
@@ -58,6 +63,19 @@ app.use(
 );
 app.use(express.json({ limit: '1gb' }));
 app.use(express.urlencoded({ extended: true, limit: '1gb' }));
+app.use((req: Request, _res: Response, next: NextFunction) => {
+  if (req.path === '/' || req.path.startsWith('/api/')) {
+    next();
+    return;
+  }
+
+  const legacyPrefixes = ['/auth', '/users', '/listings', '/wallet', '/orders', '/payments', '/deposit', '/reports', '/account-deletion-requests', '/health'];
+  if (legacyPrefixes.some((prefix) => req.path === prefix || req.path.startsWith(`${prefix}/`))) {
+    req.url = `/api${req.url}`;
+  }
+
+  next();
+});
 
 // Initialize services
 const walletService = new WalletService();
