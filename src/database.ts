@@ -194,6 +194,37 @@ export class Database {
     const password = normalizeEnv(process.env.DB_PASSWORD || process.env.MYSQLPASSWORD || parsedUrl?.password) || 'password';
     const database = normalizeEnv(process.env.DB_NAME || process.env.MYSQL_DATABASE || process.env.MYSQLDATABASE || parsedUrl?.pathname.replace(/^\//, '')) || 'marketplace';
 
+    const invalidMySqlValues = [
+      'your_mysql_host',
+      'your_mysql_root_password',
+      'your_mysql_password',
+      'your_mysql_user',
+      'your_mysql_database',
+      'your_mysql_name',
+    ];
+    const configChecks = [
+      ['host', host],
+      ['user', user],
+      ['password', password],
+      ['database', database],
+    ];
+
+    const invalidConfig = configChecks.filter(([, value]) => invalidMySqlValues.includes(value.toLowerCase()));
+    if (invalidConfig.length) {
+      const invalidKeys = invalidConfig.map(([key]) => key).join(', ');
+      throw new Error(
+        `Invalid MySQL configuration: placeholder values detected for ${invalidKeys}. ` +
+          'Please set real MySQL credentials in your production environment variables.'
+      );
+    }
+
+    if (!host || !user || !password || !database) {
+      throw new Error(
+        'Invalid MySQL configuration: missing required database connection settings. ' +
+          'Ensure MYSQL_URL or MYSQLHOST / MYSQLUSER / MYSQLPASSWORD / MYSQLDATABASE are configured.'
+      );
+    }
+
     this.pool = mysql.createPool({
       host,
       port,
