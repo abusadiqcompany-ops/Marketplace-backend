@@ -174,12 +174,21 @@ export class Database {
   private initialized = false;
 
   constructor() {
+    const connectionUrl = process.env.DATABASE_URL || process.env.MYSQL_URL || '';
+    const parsedUrl = connectionUrl ? new URL(connectionUrl) : null;
+
+    const host = process.env.DB_HOST || parsedUrl?.hostname || 'localhost';
+    const port = Number(process.env.DB_PORT || parsedUrl?.port || 3306);
+    const user = process.env.DB_USER || parsedUrl?.username || 'root';
+    const password = process.env.DB_PASSWORD || parsedUrl?.password || 'password';
+    const database = process.env.DB_NAME || parsedUrl?.pathname.replace(/^\//, '') || 'marketplace';
+
     this.pool = mysql.createPool({
-      host: process.env.DB_HOST || 'localhost',
-      port: Number(process.env.DB_PORT || 3306),
-      user: process.env.DB_USER || 'root',
-      password: process.env.DB_PASSWORD || 'password',
-      database: process.env.DB_NAME || 'marketplace',
+      host,
+      port,
+      user,
+      password,
+      database,
       waitForConnections: true,
       connectionLimit: 10,
       queueLimit: 0,
