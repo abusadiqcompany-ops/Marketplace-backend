@@ -1,5 +1,4 @@
 import express from 'express';
-import cors from 'cors';
 import dotenv from 'dotenv';
 import { v4 as uuidv4 } from 'uuid';
 import { db, initializeDatabase, } from './database.js';
@@ -18,6 +17,8 @@ const frontendOrigin = getFrontendUrl();
 const allowedOrigins = new Set([
     frontendOrigin,
     process.env.FRONTEND_URL,
+    'https://marketplace-frontend-git-main-musaf-technologies.vercel.app',
+    'https://marketplace-frontend-mu-two.vercel.app',
     'http://localhost:5173',
     'http://127.0.0.1:5173',
     'http://localhost:4173',
@@ -28,26 +29,43 @@ const allowedOrigins = new Set([
     'https://127.0.0.1:4173',
     ...(process.env.ALLOWED_ORIGINS?.split(',').filter(Boolean) || []),
 ]);
+const normalizeOrigin = (origin) => origin?.replace(/\/$/, '');
 const isAllowedOrigin = (origin) => {
     if (!origin)
         return true;
-    if (allowedOrigins.has(origin))
+    const normalizedOrigin = normalizeOrigin(origin);
+    if (!normalizedOrigin)
         return true;
-    return /(?:^|\.)devtunnels\.ms$/i.test(origin) || /localhost|127\.0\.0\.1/i.test(origin);
+    if (allowedOrigins.has(normalizedOrigin))
+        return true;
+    return /(?:^|\.)vercel\.app$/i.test(normalizedOrigin) || /(?:^|\.)devtunnels\.ms$/i.test(normalizedOrigin) || /localhost|127\.0\.0\.1/i.test(normalizedOrigin);
 };
-app.use(cors({
-    origin: (origin, callback) => {
-        if (isAllowedOrigin(origin)) {
-            callback(null, true);
-        }
-        else {
-            callback(new Error('CORS policy does not allow this origin'));
-        }
-    },
-    credentials: true,
-}));
+app.use((req, res, next) => {
+    const origin = req.get('origin');
+    const allowedOrigin = origin && isAllowedOrigin(origin) ? origin : frontendOrigin;
+    res.header('Access-Control-Allow-Origin', allowedOrigin);
+    res.header('Access-Control-Allow-Credentials', 'true');
+    res.header('Access-Control-Allow-Methods', 'GET,POST,PUT,PATCH,DELETE,OPTIONS');
+    res.header('Access-Control-Allow-Headers', 'Content-Type, Authorization, X-Requested-With');
+    res.header('Access-Control-Max-Age', '86400');
+    if (req.method === 'OPTIONS') {
+        return res.sendStatus(204);
+    }
+    next();
+});
 app.use(express.json({ limit: '1gb' }));
 app.use(express.urlencoded({ extended: true, limit: '1gb' }));
+app.use((req, _res, next) => {
+    if (req.path === '/' || req.path.startsWith('/api/')) {
+        next();
+        return;
+    }
+    const legacyPrefixes = ['/auth', '/users', '/listings', '/wallet', '/orders', '/payments', '/deposit', '/reports', '/account-deletion-requests', '/health'];
+    if (legacyPrefixes.some((prefix) => req.path === prefix || req.path.startsWith(`${prefix}/`))) {
+        req.url = `/api${req.url}`;
+    }
+    next();
+});
 // Initialize services
 const walletService = new WalletService();
 const orderService = new OrderService();
