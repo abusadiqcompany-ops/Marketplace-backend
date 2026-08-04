@@ -1,0 +1,1 @@
+{"version":3,"file":"frontend.d.ts","sourceRoot":"","sources":["../../src/utils/frontend.ts"],"names":[],"mappings":"AAAA,QAAA,MAAM,oBAAoB,mDAAmD,CAAC;AAE9E,iBAAS,cAAc,CAAC,GAAG,GAAE,MAAM,CAAC,MAAM,EAAE,MAAM,GAAG,SAAS,CAAe,UAO5E;AAED,OAAO,EAAE,oBAAoB,EAAE,cAAc,EAAE,CAAC"}

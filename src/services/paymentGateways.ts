@@ -1,4 +1,5 @@
 import axios from 'axios';
+import { getFrontendUrl } from '../utils/frontend.js';
 
 // Paystack Payment Service
 export class PaystackService {
@@ -22,7 +23,7 @@ export class PaystackService {
           email,
           amount: Math.round(amount * 100), // Paystack uses kobo (1/100 of Naira)
           metadata,
-          callback_url: callbackUrl || `${process.env.FRONTEND_URL || 'http://localhost:5173'}/payment/callback?provider=paystack`,
+          callback_url: callbackUrl || `${getFrontendUrl()}/payment/callback?provider=paystack`,
         },
         {
           headers: {
@@ -170,14 +171,14 @@ export class FlutterwaveService {
           tx_ref: txRef,
           amount,
           currency,
-          redirect_url: callbackUrl || `${process.env.FRONTEND_URL || 'http://localhost:5173'}/payment/callback?provider=flutterwave`,
+          redirect_url: callbackUrl || `${getFrontendUrl()}/payment/callback?provider=flutterwave`,
           customer: {
             email,
           },
           customizations: {
             title: 'MarketConnect Payment',
             description: 'Purchase from MarketConnect',
-            logo: `${process.env.FRONTEND_URL}/logo.png`,
+            logo: `${getFrontendUrl()}/logo.png`,
           },
           meta: metadata,
         },

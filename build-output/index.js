@@ -8,12 +8,15 @@ import { AuthService } from './services/auth.js';
 import { PaystackService, FlutterwaveService } from './services/paymentGateways.js';
 import { verifyAuthToken, requireRole, optionalAuth } from './middleware/auth.js';
 import { verifyRefreshToken, generateTokenPair, extractTokenFromHeader } from './utils/auth.js';
+import { getFrontendUrl } from './utils/frontend.js';
 dotenv.config();
 const app = express();
 const PORT = Number(process.env.PORT || 3001);
 const HOST = process.env.HOST || '0.0.0.0';
 // Middleware
+const frontendOrigin = getFrontendUrl();
 const allowedOrigins = new Set([
+    frontendOrigin,
     process.env.FRONTEND_URL,
     'http://localhost:5173',
     'http://127.0.0.1:5173',
@@ -229,7 +232,7 @@ app.post('/api/users/:id/verify-membership', verifyAuthToken, asyncHandler(async
     }
     const email = user.email;
     const reference = `${selectedProvider.toUpperCase()}_${Date.now()}_${uuidv4().substring(0, 8)}`;
-    const callbackBase = `${process.env.FRONTEND_URL || 'http://localhost:5173'}/payment/callback`;
+    const callbackBase = `${getFrontendUrl()}/payment/callback`;
     if (selectedProvider === 'paystack') {
         const paymentData = await paystackService.initializeTransaction(email, verificationAmount, {
             userId: user.id,
@@ -448,7 +451,7 @@ app.get('/api/listings/seller/:sellerId', asyncHandler(async (req, res) => {
     res.json(listings);
 }));
 app.get('/listing/new', (req, res) => {
-    const frontendUrl = process.env.FRONTEND_URL || 'http://localhost:5173';
+    const frontendUrl = getFrontendUrl();
     res.redirect(`${frontendUrl}/listing/new`);
 });
 // ============== PROFILE ROUTES ==============
