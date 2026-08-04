@@ -4,12 +4,31 @@ dotenv.config();
 export class Database {
     constructor() {
         this.initialized = false;
+        const normalizeEnv = (value) => {
+            if (!value)
+                return '';
+            return value.trim().replace(/^['"]|['"]$/g, '').replace(/\$\{\{[^}]+\}\}/g, '');
+        };
+        const connectionUrl = normalizeEnv(process.env.DATABASE_URL || process.env.MYSQL_URL);
+        const parsedUrl = connectionUrl ? (() => {
+            try {
+                return new URL(connectionUrl);
+            }
+            catch {
+                return null;
+            }
+        })() : null;
+        const host = normalizeEnv(process.env.DB_HOST || process.env.MYSQLHOST || parsedUrl?.hostname) || 'localhost';
+        const port = Number(normalizeEnv(process.env.DB_PORT || process.env.MYSQLPORT || parsedUrl?.port) || 3306);
+        const user = normalizeEnv(process.env.DB_USER || process.env.MYSQLUSER || parsedUrl?.username) || 'root';
+        const password = normalizeEnv(process.env.DB_PASSWORD || process.env.MYSQLPASSWORD || parsedUrl?.password) || 'password';
+        const database = normalizeEnv(process.env.DB_NAME || process.env.MYSQL_DATABASE || process.env.MYSQLDATABASE || parsedUrl?.pathname.replace(/^\//, '')) || 'marketplace';
         this.pool = mysql.createPool({
-            host: process.env.DB_HOST || 'localhost',
-            port: Number(process.env.DB_PORT || 3306),
-            user: process.env.DB_USER || 'root',
-            password: process.env.DB_PASSWORD || 'password',
-            database: process.env.DB_NAME || 'marketplace',
+            host,
+            port,
+            user,
+            password,
+            database,
             waitForConnections: true,
             connectionLimit: 10,
             queueLimit: 0,

@@ -836,6 +836,7 @@ async function startServer() {
     }
     catch (error) {
         console.error('❌ MySQL initialization failed:', error);
+        console.warn('⚠️ Continuing without database for now. API routes that require persistence will fail until DB is configured.');
     }
     const server = app.listen(PORT, HOST, () => {
         console.log(`🚀 MarketConnect API running on http://${HOST === '0.0.0.0' ? '127.0.0.1' : HOST}:${PORT}`);
