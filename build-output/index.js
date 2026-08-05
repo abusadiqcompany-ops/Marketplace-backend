@@ -11,7 +11,7 @@ import { verifyRefreshToken, generateTokenPair, extractTokenFromHeader } from '.
 import { getFrontendUrl } from './utils/frontend.js';
 dotenv.config();
 const app = express();
-const PORT = Number(process.env.PORT || 3002);
+const PORT = Number(process.env.PORT || 3001);
 const HOST = process.env.HOST || '0.0.0.0';
 // Middleware
 const frontendOrigin = getFrontendUrl();
@@ -59,11 +59,11 @@ app.options('*', cors(corsOptions));
 app.use(express.json({ limit: '1gb' }));
 app.use(express.urlencoded({ extended: true, limit: '1gb' }));
 app.use((req, _res, next) => {
-    if (req.path === '/' || req.path.startsWith('/api/')) {
+    if (req.path === '/' || req.path === '/health' || req.path.startsWith('/api/')) {
         next();
         return;
     }
-    const legacyPrefixes = ['/auth', '/users', '/listings', '/wallet', '/orders', '/payments', '/deposit', '/reports', '/account-deletion-requests', '/health'];
+    const legacyPrefixes = ['/auth', '/users', '/listings', '/wallet', '/orders', '/payments', '/deposit', '/reports', '/account-deletion-requests'];
     if (legacyPrefixes.some((prefix) => req.path === prefix || req.path.startsWith(`${prefix}/`))) {
         req.url = `/api${req.url}`;
     }

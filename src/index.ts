@@ -70,12 +70,12 @@ app.options('*', cors(corsOptions));
 app.use(express.json({ limit: '1gb' }));
 app.use(express.urlencoded({ extended: true, limit: '1gb' }));
 app.use((req: Request, _res: Response, next: NextFunction) => {
-  if (req.path === '/' || req.path.startsWith('/api/')) {
+  if (req.path === '/' || req.path === '/health' || req.path.startsWith('/api/')) {
     next();
     return;
   }
 
-  const legacyPrefixes = ['/auth', '/users', '/listings', '/wallet', '/orders', '/payments', '/deposit', '/reports', '/account-deletion-requests', '/health'];
+  const legacyPrefixes = ['/auth', '/users', '/listings', '/wallet', '/orders', '/payments', '/deposit', '/reports', '/account-deletion-requests'];
   if (legacyPrefixes.some((prefix) => req.path === prefix || req.path.startsWith(`${prefix}/`))) {
     req.url = `/api${req.url}`;
   }
