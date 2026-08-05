@@ -43,28 +43,30 @@ const allowedOrigins = new Set([
 ]);
 const normalizeOrigin = (origin: string | undefined) => origin?.replace(/\/$/, '');
 const isAllowedOrigin = (origin: string | undefined) => {
-  if (!origin) return true;
+  if (!origin) return false;
   const normalizedOrigin = normalizeOrigin(origin);
-  if (!normalizedOrigin) return true;
+  if (!normalizedOrigin) return false;
   if (allowedOrigins.has(normalizedOrigin)) return true;
   return /(?:^|\.)vercel\.app$/i.test(normalizedOrigin) || /(?:^|\.)devtunnels\.ms$/i.test(normalizedOrigin) || /localhost|127\.0\.0\.1/i.test(normalizedOrigin);
 };
-app.use((req: Request, res: Response, next: NextFunction) => {
-  const origin = req.get('origin');
-  const allowedOrigin = origin && isAllowedOrigin(origin) ? origin : frontendOrigin;
 
-  res.header('Access-Control-Allow-Origin', allowedOrigin);
-  res.header('Access-Control-Allow-Credentials', 'true');
-  res.header('Access-Control-Allow-Methods', 'GET,POST,PUT,PATCH,DELETE,OPTIONS');
-  res.header('Access-Control-Allow-Headers', 'Content-Type, Authorization, X-Requested-With');
-  res.header('Access-Control-Max-Age', '86400');
+const corsOptions = {
+  origin: (origin: string | undefined, callback: (err: Error | null, allow?: boolean) => void) => {
+    if (!origin || isAllowedOrigin(origin)) {
+      callback(null, true);
+      return;
+    }
 
-  if (req.method === 'OPTIONS') {
-    return res.sendStatus(204);
-  }
+    callback(new Error(`CORS policy does not allow this origin: ${origin}`));
+  },
+  credentials: true,
+  methods: ['GET', 'POST', 'PUT', 'PATCH', 'DELETE', 'OPTIONS'],
+  allowedHeaders: ['Content-Type', 'Authorization', 'X-Requested-With', 'Accept'],
+  maxAge: 86400,
+};
 
-  next();
-});
+app.use(cors(corsOptions));
+app.options('*', cors(corsOptions));
 app.use(express.json({ limit: '1gb' }));
 app.use(express.urlencoded({ extended: true, limit: '1gb' }));
 app.use((req: Request, _res: Response, next: NextFunction) => {
