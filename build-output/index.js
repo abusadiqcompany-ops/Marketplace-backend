@@ -11,7 +11,7 @@ import { verifyRefreshToken, generateTokenPair, extractTokenFromHeader } from '.
 import { getFrontendUrl } from './utils/frontend.js';
 dotenv.config();
 const app = express();
-const PORT = Number(process.env.PORT || 8080);
+const PORT = Number(process.env.PORT || 3001);
 const HOST = process.env.HOST || '0.0.0.0';
 // Middleware
 const frontendOrigin = getFrontendUrl();
@@ -500,17 +500,24 @@ app.get('/api/profile/stats', verifyAuthToken, asyncHandler(async (req, res) => 
     const sales = (await db.getAllOrders()).filter((o) => o.sellerId === sellerId).length;
     res.json({ activeListings, avgRating: listings.length ? avgRating : 0, totalReviews, sales });
 }));
-app.post('/api/profile/avatar', verifyAuthToken, asyncHandler(async (req, res) => {
-    const { image } = req.body; // expect data URL from client
-    if (!image)
-        return res.status(400).json({ error: 'Missing image' });
-    const user = await db.getUser(req.userId);
-    if (!user)
-        return res.status(404).json({ error: 'User not found' });
-    // store data URL as avatar
-    await db.updateUser(user.id, { avatar: image });
-    res.json({ avatar: image });
-}));
+app.post('/api/profile/avatar', verifyAuthToken, async (req, res) => {
+    try {
+        const { image } = req.body; // expect data URL from client
+        if (!image)
+            return res.status(400).json({ error: 'Missing image' });
+        const user = await db.getUser(req.userId);
+        if (!user)
+            return res.status(404).json({ error: 'User not found' });
+        // store data URL as avatar
+        await db.updateUser(user.id, { avatar: image });
+        res.json({ avatar: image });
+    }
+    catch (err) {
+        console.error('[api] /api/profile/avatar error:', err?.message || err);
+        // If DB is not available or other internal error, return 503 with friendly message
+        res.status(503).json({ error: 'Service temporarily unavailable. Try again later.' });
+    }
+});
 // ============== WALLET ROUTES ==============
 app.get('/api/wallet/balance', verifyAuthToken, asyncHandler(async (req, res) => {
     const balance = await walletService.getBalance(req.userId);
