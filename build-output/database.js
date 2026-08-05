@@ -73,6 +73,12 @@ export class Database {
             }
         }
     }
+    async ensureAvatarColumnType() {
+        const [rows] = await this.pool.query('SELECT COLUMN_NAME FROM INFORMATION_SCHEMA.COLUMNS WHERE TABLE_SCHEMA = DATABASE() AND TABLE_NAME = ? AND COLUMN_NAME = ?', ['users', 'avatar']);
+        if (rows.length) {
+            await this.pool.query('ALTER TABLE users MODIFY avatar MEDIUMTEXT NULL');
+        }
+    }
     async init() {
         if (this.initialized)
             return;
@@ -83,7 +89,7 @@ export class Database {
         email VARCHAR(255) NOT NULL UNIQUE,
         password TEXT NULL,
         role VARCHAR(20) NOT NULL,
-        avatar TEXT NULL,
+        avatar MEDIUMTEXT NULL,
         walletBalance DECIMAL(12,2) NOT NULL DEFAULT 0,
         accountNumber VARCHAR(100) NULL,
         location JSON NULL,
@@ -105,6 +111,7 @@ export class Database {
       )
     `);
         await this.ensureUserVerificationColumns();
+        await this.ensureAvatarColumnType();
         await this.pool.query(`
       CREATE TABLE IF NOT EXISTS listings (
         id VARCHAR(36) PRIMARY KEY,

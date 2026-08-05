@@ -145,6 +145,7 @@ export declare class Database {
     private initialized;
     constructor();
     private ensureUserVerificationColumns;
+    private ensureAvatarColumnType;
     init(): Promise<void>;
     close(): Promise<void>;
     private select;
