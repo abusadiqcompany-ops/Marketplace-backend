@@ -630,15 +630,23 @@ app.get('/api/profile/stats', verifyAuthToken, asyncHandler(async (req: AuthRequ
   res.json({ activeListings, avgRating: listings.length ? avgRating : 0, totalReviews, sales });
 }));
 
-app.post('/api/profile/avatar', verifyAuthToken, asyncHandler(async (req: AuthRequest, res: Response) => {
-  const { image } = req.body; // expect data URL from client
-  if (!image) return res.status(400).json({ error: 'Missing image' });
-  const user = await db.getUser(req.userId!);
-  if (!user) return res.status(404).json({ error: 'User not found' });
-  // store data URL as avatar
-  await db.updateUser(user.id, { avatar: image });
-  res.json({ avatar: image });
-}));
+app.post('/api/profile/avatar', verifyAuthToken, async (req: AuthRequest, res: Response) => {
+  try {
+    const { image } = req.body; // expect data URL from client
+    if (!image) return res.status(400).json({ error: 'Missing image' });
+
+    const user = await db.getUser(req.userId!);
+    if (!user) return res.status(404).json({ error: 'User not found' });
+
+    // store data URL as avatar
+    await db.updateUser(user.id, { avatar: image });
+    res.json({ avatar: image });
+  } catch (err: any) {
+    console.error('[api] /api/profile/avatar error:', err?.message || err);
+    // If DB is not available or other internal error, return 503 with friendly message
+    res.status(503).json({ error: 'Service temporarily unavailable. Try again later.' });
+  }
+});
 
 // ============== WALLET ROUTES ==============
 
