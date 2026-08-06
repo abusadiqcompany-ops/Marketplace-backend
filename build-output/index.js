@@ -9,6 +9,7 @@ import { PaystackService, FlutterwaveService } from './services/paymentGateways.
 import { verifyAuthToken, requireRole, optionalAuth } from './middleware/auth.js';
 import { verifyRefreshToken, generateTokenPair, extractTokenFromHeader } from './utils/auth.js';
 import { getFrontendUrl } from './utils/frontend.js';
+import { createChatMessage, deriveChatId } from './utils/chat.js';
 dotenv.config();
 const app = express();
 const PORT = Number(process.env.PORT || 3001);
@@ -23,6 +24,8 @@ const allowedOrigins = new Set([
     'http://localhost:5173',
     'http://127.0.0.1:5173',
     'http://localhost:4173',
+    'http://localhost:3000',
+    'http://127.0.0.1:3000',
     'http://127.0.0.1:4173',
     'http://localhost:4174',
     'http://127.0.0.1:4174',
@@ -74,7 +77,37 @@ const walletService = new WalletService();
 const orderService = new OrderService();
 const authService = new AuthService();
 const paystackService = new PaystackService(process.env.PAYSTACK_SECRET_KEY || '');
+const chatMessages = [];
+const chatSubscribers = new Map();
 const flutterwaveService = new FlutterwaveService(process.env.FLUTTERWAVE_SECRET_KEY || '', process.env.FLUTTERWAVE_PUBLIC_KEY || '');
+const broadcastChatMessage = (message) => {
+    const subscribers = chatSubscribers.get(message.chatId);
+    if (!subscribers?.size)
+        return;
+    const payload = `data: ${JSON.stringify(message)}\n\n`;
+    for (const subscriber of Array.from(subscribers)) {
+        try {
+            subscriber.res.write(payload);
+        }
+        catch (error) {
+            console.warn('[chat] Failed to push message to subscriber', error);
+        }
+    }
+};
+const removeChatSubscriber = (chatId, subscriberId) => {
+    const subscribers = chatSubscribers.get(chatId);
+    if (!subscribers)
+        return;
+    for (const subscriber of Array.from(subscribers)) {
+        if (subscriber.id === subscriberId) {
+            subscribers.delete(subscriber);
+            break;
+        }
+    }
+    if (!subscribers.size) {
+        chatSubscribers.delete(chatId);
+    }
+};
 // Error handler middleware
 const asyncHandler = (fn) => (req, res, next) => {
     Promise.resolve(fn(req, res, next)).catch(next);
@@ -826,6 +859,43 @@ app.post('/api/orders/:id/dispute', verifyAuthToken, asyncHandler(async (req, re
     }
     const order = await orderService.raiseDispute(req.params.id, userId, reason);
     res.json(order);
+}));
+// ============== CHAT ==============
+app.get('/api/chat/:chatId/messages', asyncHandler(async (req, res) => {
+    const chatId = req.params.chatId;
+    const messages = chatMessages.filter((message) => message.chatId === chatId).sort((a, b) => new Date(a.timestamp).getTime() - new Date(b.timestamp).getTime());
+    res.json(messages);
+}));
+app.get('/api/chat/stream', (req, res) => {
+    const chatId = String(req.query.chatId || '');
+    const userId = String(req.query.userId || '');
+    if (!chatId || !userId) {
+        res.status(400).json({ error: 'chatId and userId are required' });
+        return;
+    }
+    res.setHeader('Content-Type', 'text/event-stream');
+    res.setHeader('Cache-Control', 'no-cache');
+    res.setHeader('Connection', 'keep-alive');
+    res.flushHeaders?.();
+    const subscriber = { id: uuidv4(), res };
+    const subscribers = chatSubscribers.get(chatId) || new Set();
+    subscribers.add(subscriber);
+    chatSubscribers.set(chatId, subscribers);
+    res.write(': connected\n\n');
+    req.on('close', () => {
+        removeChatSubscriber(chatId, subscriber.id);
+    });
+});
+app.post('/api/chat/messages', asyncHandler(async (req, res) => {
+    const { senderId, senderName, content, recipientId, listingId } = req.body || {};
+    if (!senderId || !senderName || !content || !recipientId) {
+        return res.status(400).json({ error: 'senderId, senderName, content, and recipientId are required' });
+    }
+    const chatId = deriveChatId(senderId, recipientId, listingId);
+    const message = createChatMessage({ chatId, senderId, senderName, content });
+    chatMessages.push(message);
+    broadcastChatMessage(message);
+    res.status(201).json(message);
 }));
 // ============== HEALTH ==============
 app.get('/health', (_req, res) => {
