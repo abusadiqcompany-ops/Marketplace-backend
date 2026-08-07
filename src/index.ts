@@ -724,14 +724,15 @@ app.post(
       return res.status(400).json({ error: 'Invalid deposit amount' });
     }
 
-    const transaction = walletService.addDeposit(
+    const transaction = await walletService.addDeposit(
       req.params.userId,
       amount,
       paymentGateway || 'manual',
       reference || `WALLET_DEPOSIT_${Date.now()}`
     );
+    const balance = await walletService.getBalance(req.params.userId);
 
-    res.status(201).json(transaction);
+    res.status(201).json({ transaction, balance });
   })
 );
 
@@ -745,14 +746,15 @@ app.post(
       return res.status(400).json({ error: 'Invalid deposit amount' });
     }
 
-    const transaction = walletService.addDeposit(
+    const transaction = await walletService.addDeposit(
       req.userId!,
       amount,
       provider || 'manual',
       reference || `WALLET_DEPOSIT_${Date.now()}`
     );
+    const balance = await walletService.getBalance(req.userId!);
 
-    res.status(201).json(transaction);
+    res.status(201).json({ transaction, balance });
   })
 );
 

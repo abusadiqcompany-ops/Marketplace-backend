@@ -11,3 +11,4 @@ tmp/
 tmp*
 scripts/
 .env.example
+package.json
