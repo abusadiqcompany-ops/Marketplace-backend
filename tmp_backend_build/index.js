@@ -9,7 +9,7 @@ import { PaystackService, FlutterwaveService } from './services/paymentGateways.
 import { verifyAuthToken, requireRole, optionalAuth } from './middleware/auth.js';
 dotenv.config();
 const app = express();
-const PORT = process.env.PORT || 3001;
+const PORT = process.env.PORT || 8080;
 // Middleware
 const allowedOrigins = [
     process.env.FRONTEND_URL || 'http://localhost:5173',
@@ -303,7 +303,7 @@ app.get('/api/listings/seller/:sellerId', asyncHandler(async (req, res) => {
     res.json(listings);
 }));
 app.get('/listing/new', (req, res) => {
-    const frontendUrl = process.env.FRONTEND_URL || 'http://localhost:5173';
+    const frontendUrl = process.env.FRONTEND_URL || 'https://marketplace-frontend-mu-two.vercel.app';
     res.redirect(`${frontendUrl}/listing/new`);
 });
 // ============== PROFILE ROUTES ==============

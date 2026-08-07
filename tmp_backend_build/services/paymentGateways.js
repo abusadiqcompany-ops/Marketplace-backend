@@ -11,7 +11,7 @@ export class PaystackService {
                 email,
                 amount: Math.round(amount * 100), // Paystack uses kobo (1/100 of Naira)
                 metadata,
-                callback_url: `${process.env.FRONTEND_URL || 'http://localhost:5173'}/payment/callback?provider=paystack`,
+                callback_url: `${process.env.FRONTEND_URL || 'https://marketplace-frontend-mu-two.vercel.app'}/payment/callback?provider=paystack`,
             }, {
                 headers: {
                     Authorization: `Bearer ${this.secretKey}`,
@@ -113,7 +113,7 @@ export class FlutterwaveService {
                 tx_ref: txRef,
                 amount,
                 currency,
-                redirect_url: `${process.env.FRONTEND_URL || 'http://localhost:5173'}/payment/callback?provider=flutterwave`,
+                redirect_url: `${process.env.FRONTEND_URL || 'https://marketplace-frontend-mu-two.vercel.app'}/payment/callback?provider=flutterwave`,
                 customer: {
                     email,
                 },
