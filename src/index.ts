@@ -762,54 +762,77 @@ app.post(
   '/api/wallet/deposit/initialize',
   verifyAuthToken,
   asyncHandler(async (req: AuthRequest, res: Response) => {
-    const { amount, provider } = req.body;
+      const { amount, provider, callbackUrl } = req.body;
 
-    if (!amount || amount <= 0) {
-      return res.status(400).json({ error: 'Invalid deposit amount' });
-    }
+      if (!amount || amount <= 0) {
+        return res.status(400).json({ error: 'Invalid deposit amount' });
+      }
 
-    if (!provider || !['paystack', 'flutterwave'].includes(provider)) {
-      return res.status(400).json({ error: 'Unsupported deposit provider' });
-    }
+      if (!provider || !['paystack', 'flutterwave'].includes(provider)) {
+        return res.status(400).json({ error: 'Unsupported deposit provider' });
+      }
 
-    const email = req.user?.email;
-    if (!email) {
-      return res.status(400).json({ error: 'User email is required' });
-    }
+      const email = req.user?.email;
+      if (!email) {
+        return res.status(400).json({ error: 'User email is required' });
+      }
 
-    const origin = (req.get('origin') || req.get('referer') || getFrontendUrl()).replace(/\/$/, '');
-    const paymentCallbackUrl = `${origin}/payment/callback?provider=${provider}`;
+      const rawOrigin = req.get('origin');
+      const rawReferer = req.get('referer');
+      const safeOrigin = (() => {
+        if (rawOrigin && /^https?:\/\//i.test(rawOrigin)) {
+          return rawOrigin.replace(/\/$/, '');
+        }
+        if (rawReferer && /^https?:\/\//i.test(rawReferer)) {
+          try {
+            const url = new URL(rawReferer);
+            return `${url.protocol}//${url.host}`;
+          } catch {
+            // fall through
+          }
+        }
+        const envFrontend = process.env.FRONTEND_URL?.trim();
+        if (envFrontend && /^https?:\/\//i.test(envFrontend)) {
+          return envFrontend.replace(/\/$/, '');
+        }
+        return getFrontendUrl();
+      })();
 
-    if (process.env.NODE_ENV !== 'production') {
-      console.debug('[wallet deposit] init:', {
-        provider,
-        origin,
-        paymentCallbackUrl,
-        userId: req.userId,
-        email,
-        amount,
-      });
-    }
+      const resolvedCallbackUrl = callbackUrl && /^https?:\/\//i.test(callbackUrl)
+        ? callbackUrl
+        : callbackUrl && callbackUrl.startsWith('/')
+          ? `${safeOrigin}${callbackUrl}`
+          : `${safeOrigin}/payment/callback?provider=${provider}`;
 
-    if (provider === 'paystack') {
-      const paymentData = await paystackService.initializeTransaction(email, amount, {
+      if (process.env.NODE_ENV !== 'production') {
+        console.debug('[wallet deposit] init:', {
+          provider,
+          rawOrigin,
+          rawReferer,
+          safeOrigin,
+          callbackUrl,
+          resolvedCallbackUrl,
+          userId: req.userId,
+          email,
+          amount,
+        });
+      }
+
+      if (provider === 'paystack') {
+        const paymentData = await paystackService.initializeTransaction(email, amount, {
+          userId: req.userId,
+          type: 'wallet_deposit',
+          provider,
+        }, resolvedCallbackUrl);
+        return res.json(paymentData);
+      }
+
+      const txRef = `WALLET_${Date.now()}_${uuidv4().substring(0, 8)}`;
+      const paymentData = await flutterwaveService.initializePayment(email, amount, txRef, {
         userId: req.userId,
         type: 'wallet_deposit',
         provider,
-      }, paymentCallbackUrl);
-      return res.json(paymentData);
-    }
-
-    const txRef = `WALLET_${Date.now()}_${uuidv4().substring(0, 8)}`;
-    const paymentData = await flutterwaveService.initializePayment(email, amount, txRef, {
-      userId: req.userId,
-      type: 'wallet_deposit',
-      provider,
-    }, 'NGN', paymentCallbackUrl);
-
-    res.json({ ...paymentData, txRef });
-  })
-);
+      }, 'NGN', resolvedCallbackUrl);
 
 app.post(
   '/api/wallet/:userId/withdraw',
