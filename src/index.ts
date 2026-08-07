@@ -780,6 +780,17 @@ app.post(
     const origin = (req.get('origin') || req.get('referer') || getFrontendUrl()).replace(/\/$/, '');
     const paymentCallbackUrl = `${origin}/payment/callback?provider=${provider}`;
 
+    if (process.env.NODE_ENV !== 'production') {
+      console.debug('[wallet deposit] init:', {
+        provider,
+        origin,
+        paymentCallbackUrl,
+        userId: req.userId,
+        email,
+        amount,
+      });
+    }
+
     if (provider === 'paystack') {
       const paymentData = await paystackService.initializeTransaction(email, amount, {
         userId: req.userId,
@@ -1032,6 +1043,15 @@ app.post(
       }
 
       const depositAmount = Number(amount) / 100;
+      if (process.env.NODE_ENV !== 'production') {
+        console.debug('[wallet deposit] verify paystack:', {
+          reference,
+          depositAmount,
+          metadata,
+          userId,
+          type,
+        });
+      }
       const transaction = await walletService.addDeposit(userId, depositAmount, 'paystack', reference);
       const balance = await walletService.getBalance(userId);
       res.json({ verified: true, transaction, balance });
@@ -1052,6 +1072,15 @@ app.post(
       }
 
       const depositAmount = Number(data.amount);
+      if (process.env.NODE_ENV !== 'production') {
+        console.debug('[wallet deposit] verify flutterwave:', {
+          reference,
+          depositAmount,
+          dataMeta: data.meta,
+          userId,
+          type,
+        });
+      }
       const transaction = await walletService.addDeposit(userId, depositAmount, 'flutterwave', reference);
       const balance = await walletService.getBalance(userId);
       res.json({ verified: true, transaction, balance });
