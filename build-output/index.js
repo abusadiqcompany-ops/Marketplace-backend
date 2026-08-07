@@ -572,16 +572,18 @@ app.post('/api/wallet/:userId/deposit', verifyAuthToken, asyncHandler(async (req
     if (!amount || amount <= 0) {
         return res.status(400).json({ error: 'Invalid deposit amount' });
     }
-    const transaction = walletService.addDeposit(req.params.userId, amount, paymentGateway || 'manual', reference || `WALLET_DEPOSIT_${Date.now()}`);
-    res.status(201).json(transaction);
+    const transaction = await walletService.addDeposit(req.params.userId, amount, paymentGateway || 'manual', reference || `WALLET_DEPOSIT_${Date.now()}`);
+    const balance = await walletService.getBalance(req.params.userId);
+    res.status(201).json({ transaction, balance });
 }));
 app.post('/api/wallet/deposit', verifyAuthToken, asyncHandler(async (req, res) => {
     const { amount, provider, reference } = req.body;
     if (!amount || amount <= 0) {
         return res.status(400).json({ error: 'Invalid deposit amount' });
     }
-    const transaction = walletService.addDeposit(req.userId, amount, provider || 'manual', reference || `WALLET_DEPOSIT_${Date.now()}`);
-    res.status(201).json(transaction);
+    const transaction = await walletService.addDeposit(req.userId, amount, provider || 'manual', reference || `WALLET_DEPOSIT_${Date.now()}`);
+    const balance = await walletService.getBalance(req.userId);
+    res.status(201).json({ transaction, balance });
 }));
 app.post('/api/wallet/deposit/initialize', verifyAuthToken, asyncHandler(async (req, res) => {
     const { amount, provider } = req.body;
@@ -753,7 +755,8 @@ app.post('/api/deposit/verify', verifyAuthToken, asyncHandler(async (req, res) =
         }
         const depositAmount = Number(amount) / 100;
         const transaction = await walletService.addDeposit(userId, depositAmount, 'paystack', reference);
-        res.json({ verified: true, transaction });
+        const balance = await walletService.getBalance(userId);
+        res.json({ verified: true, transaction, balance });
         return;
     }
     if (provider === 'flutterwave') {
@@ -769,7 +772,8 @@ app.post('/api/deposit/verify', verifyAuthToken, asyncHandler(async (req, res) =
         }
         const depositAmount = Number(data.amount);
         const transaction = await walletService.addDeposit(userId, depositAmount, 'flutterwave', reference);
-        res.json({ verified: true, transaction });
+        const balance = await walletService.getBalance(userId);
+        res.json({ verified: true, transaction, balance });
         return;
     }
     res.status(400).json({ error: 'Unsupported provider' });
