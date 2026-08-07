@@ -12,7 +12,7 @@ import { getFrontendUrl } from './utils/frontend.js';
 import { createChatMessage, deriveChatId } from './utils/chat.js';
 dotenv.config();
 const app = express();
-const PORT = Number(process.env.PORT || 3001);
+const PORT = Number(process.env.PORT || 8080);
 const HOST = process.env.HOST || '0.0.0.0';
 // Middleware
 const frontendOrigin = getFrontendUrl();
@@ -586,7 +586,7 @@ app.post('/api/wallet/deposit', verifyAuthToken, asyncHandler(async (req, res) =
     res.status(201).json({ transaction, balance });
 }));
 app.post('/api/wallet/deposit/initialize', verifyAuthToken, asyncHandler(async (req, res) => {
-    const { amount, provider } = req.body;
+    const { amount, provider, callbackUrl } = req.body;
     if (!amount || amount <= 0) {
         return res.status(400).json({ error: 'Invalid deposit amount' });
     }
@@ -597,12 +597,51 @@ app.post('/api/wallet/deposit/initialize', verifyAuthToken, asyncHandler(async (
     if (!email) {
         return res.status(400).json({ error: 'User email is required' });
     }
+    const rawOrigin = req.get('origin');
+    const rawReferer = req.get('referer');
+    const safeOrigin = (() => {
+        if (rawOrigin && /^https?:\/\//i.test(rawOrigin)) {
+            return rawOrigin.replace(/\/$/, '');
+        }
+        if (rawReferer && /^https?:\/\//i.test(rawReferer)) {
+            try {
+                const url = new URL(rawReferer);
+                return `${url.protocol}//${url.host}`;
+            }
+            catch (error) {
+                // fall through
+            }
+        }
+        const envFrontend = process.env.FRONTEND_URL?.trim();
+        if (envFrontend && /^https?:\/\//i.test(envFrontend)) {
+            return envFrontend.replace(/\/$/, '');
+        }
+        return getFrontendUrl();
+    })();
+    const resolvedCallbackUrl = callbackUrl && /^https?:\/\//i.test(callbackUrl)
+        ? callbackUrl
+        : callbackUrl && callbackUrl.startsWith('/')
+            ? `${safeOrigin}${callbackUrl}`
+            : `${safeOrigin}/payment/callback?provider=${provider}`;
+    if (process.env.NODE_ENV !== 'production') {
+        console.debug('[wallet deposit] init:', {
+            provider,
+            rawOrigin,
+            rawReferer,
+            safeOrigin,
+            callbackUrl,
+            resolvedCallbackUrl,
+            userId: req.userId,
+            email,
+            amount,
+        });
+    }
     if (provider === 'paystack') {
         const paymentData = await paystackService.initializeTransaction(email, amount, {
             userId: req.userId,
             type: 'wallet_deposit',
             provider,
-        });
+        }, resolvedCallbackUrl);
         return res.json(paymentData);
     }
     const txRef = `WALLET_${Date.now()}_${uuidv4().substring(0, 8)}`;
@@ -610,8 +649,8 @@ app.post('/api/wallet/deposit/initialize', verifyAuthToken, asyncHandler(async (
         userId: req.userId,
         type: 'wallet_deposit',
         provider,
-    });
-    res.json({ ...paymentData, txRef });
+    }, 'NGN', resolvedCallbackUrl);
+    return res.json({ ...paymentData, txRef });
 }));
 app.post('/api/wallet/:userId/withdraw', verifyAuthToken, asyncHandler(async (req, res) => {
     const { amount, bankDetails } = req.body;
@@ -754,6 +793,15 @@ app.post('/api/deposit/verify', verifyAuthToken, asyncHandler(async (req, res) =
             return res.status(403).json({ error: 'Unauthorized or invalid deposit metadata' });
         }
         const depositAmount = Number(amount) / 100;
+        if (process.env.NODE_ENV !== 'production') {
+            console.debug('[wallet deposit] verify paystack:', {
+                reference,
+                depositAmount,
+                metadata,
+                userId,
+                type,
+            });
+        }
         const transaction = await walletService.addDeposit(userId, depositAmount, 'paystack', reference);
         const balance = await walletService.getBalance(userId);
         res.json({ verified: true, transaction, balance });
@@ -771,6 +819,15 @@ app.post('/api/deposit/verify', verifyAuthToken, asyncHandler(async (req, res) =
             return res.status(403).json({ error: 'Unauthorized or invalid deposit metadata' });
         }
         const depositAmount = Number(data.amount);
+        if (process.env.NODE_ENV !== 'production') {
+            console.debug('[wallet deposit] verify flutterwave:', {
+                reference,
+                depositAmount,
+                dataMeta: data.meta,
+                userId,
+                type,
+            });
+        }
         const transaction = await walletService.addDeposit(userId, depositAmount, 'flutterwave', reference);
         const balance = await walletService.getBalance(userId);
         res.json({ verified: true, transaction, balance });

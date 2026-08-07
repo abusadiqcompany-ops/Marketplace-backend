@@ -22,7 +22,7 @@ import { createChatMessage, deriveChatId, type ChatMessageRecord } from './utils
 dotenv.config();
 
 const app = express();
-const PORT = Number(process.env.PORT || 3001);
+const PORT = Number(process.env.PORT || 8080);
 const HOST = process.env.HOST || '0.0.0.0';
 
 // Middleware
@@ -787,7 +787,7 @@ app.post(
           try {
             const url = new URL(rawReferer);
             return `${url.protocol}//${url.host}`;
-          } catch {
+          } catch (error) {
             // fall through
           }
         }
@@ -833,6 +833,10 @@ app.post(
         type: 'wallet_deposit',
         provider,
       }, 'NGN', resolvedCallbackUrl);
+
+      return res.json({ ...paymentData, txRef });
+  })
+);
 
 app.post(
   '/api/wallet/:userId/withdraw',
@@ -1374,4 +1378,3 @@ async function startServer() {
 }
 
 startServer();
-
