@@ -777,12 +777,15 @@ app.post(
       return res.status(400).json({ error: 'User email is required' });
     }
 
+    const origin = (req.get('origin') || req.get('referer') || getFrontendUrl()).replace(/\/$/, '');
+    const paymentCallbackUrl = `${origin}/payment/callback?provider=${provider}`;
+
     if (provider === 'paystack') {
       const paymentData = await paystackService.initializeTransaction(email, amount, {
         userId: req.userId,
         type: 'wallet_deposit',
         provider,
-      });
+      }, paymentCallbackUrl);
       return res.json(paymentData);
     }
 
@@ -791,7 +794,7 @@ app.post(
       userId: req.userId,
       type: 'wallet_deposit',
       provider,
-    });
+    }, 'NGN', paymentCallbackUrl);
 
     res.json({ ...paymentData, txRef });
   })
