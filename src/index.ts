@@ -2,6 +2,7 @@ import express, { Request, Response, NextFunction } from 'express';
 import cors from 'cors';
 import dotenv from 'dotenv';
 import { v4 as uuidv4 } from 'uuid';
+import crypto from 'crypto';
 import {
   db,
   initializeDatabase,
@@ -949,6 +950,51 @@ app.get(
       res.status(400).json({ verified: false, error: verification.message });
     }
   })
+);
+
+// Paystack webhook endpoint — Paystack sends POST requests here.
+app.post(
+  '/api/payments/paystack/webhook',
+  express.raw({ type: '*/*', limit: '1mb' }),
+  async (req: Request, res: Response) => {
+    try {
+      const signature = (req.headers['x-paystack-signature'] || req.headers['X-Paystack-Signature']) as string | undefined;
+      const secret = process.env.PAYSTACK_SECRET_KEY || '';
+      const computed = crypto.createHmac('sha512', secret).update(req.body as Buffer).digest('hex');
+      if (!signature || signature !== computed) {
+        console.warn('[paystack webhook] invalid signature');
+        return res.status(400).send('Invalid signature');
+      }
+
+      const event = JSON.parse((req.body as Buffer).toString('utf8'));
+      if (process.env.NODE_ENV !== 'production') console.debug('[paystack webhook] event:', event?.event);
+
+      const eventType = event?.event;
+      // Handle successful charge events and update orders/wallets accordingly
+      if (eventType === 'charge.success' || eventType === 'charge.completed') {
+        const data = event.data || {};
+        const reference = data.reference;
+        try {
+          const verification = await paystackService.verifyTransaction(reference);
+          if (verification.status) {
+            const { email, amount, orderId, userId } = verification.data?.metadata || {};
+            if (orderId && userId) {
+              await orderService.lockPayment(orderId, userId, amount / 100, 'paystack', reference);
+            } else if (userId) {
+              await walletService.addDeposit(userId, amount / 100, 'paystack', reference);
+            }
+          }
+        } catch (err) {
+          console.error('[paystack webhook] processing error', err);
+        }
+      }
+
+      res.sendStatus(200);
+    } catch (err) {
+      console.error('[paystack webhook] error', err);
+      res.sendStatus(500);
+    }
+  }
 );
 
 app.post(
