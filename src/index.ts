@@ -1030,7 +1030,8 @@ app.post(
 
       const depositAmount = Number(amount) / 100;
       const transaction = await walletService.addDeposit(userId, depositAmount, 'paystack', reference);
-      res.json({ verified: true, transaction });
+      const balance = await walletService.getBalance(userId);
+      res.json({ verified: true, transaction, balance });
       return;
     }
 
@@ -1049,7 +1050,8 @@ app.post(
 
       const depositAmount = Number(data.amount);
       const transaction = await walletService.addDeposit(userId, depositAmount, 'flutterwave', reference);
-      res.json({ verified: true, transaction });
+      const balance = await walletService.getBalance(userId);
+      res.json({ verified: true, transaction, balance });
       return;
     }
 
