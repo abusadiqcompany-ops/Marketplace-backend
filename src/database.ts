@@ -434,9 +434,10 @@ export class Database {
     return rows as T[];
   }
 
-  private async execute(sql: string, params: any[] = []): Promise<void> {
+  private async execute(sql: string, params: any[] = []): Promise<any> {
     await this.init();
-    await this.pool.execute(sql, params);
+    const [result] = await this.pool.execute(sql, params);
+    return result;
   }
 
   private parseJson<T>(value: any): T | undefined {
@@ -865,7 +866,8 @@ export class Database {
 
   async deleteListing(id: string): Promise<boolean> {
     const result = await this.execute('DELETE FROM listings WHERE id = ?', [id]);
-    return (result as any).affectedRows > 0;
+    const affectedRows = (result as any)?.affectedRows ?? (result as any)?.[0]?.affectedRows ?? 0;
+    return Number(affectedRows) > 0;
   }
 
   async addOrder(order: Order): Promise<Order> {

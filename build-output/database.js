@@ -229,7 +229,8 @@ export class Database {
     }
     async execute(sql, params = []) {
         await this.init();
-        await this.pool.execute(sql, params);
+        const [result] = await this.pool.execute(sql, params);
+        return result;
     }
     parseJson(value) {
         if (value === null || value === undefined)
@@ -611,7 +612,8 @@ export class Database {
     }
     async deleteListing(id) {
         const result = await this.execute('DELETE FROM listings WHERE id = ?', [id]);
-        return result.affectedRows > 0;
+        const affectedRows = result?.affectedRows ?? result?.[0]?.affectedRows ?? 0;
+        return Number(affectedRows) > 0;
     }
     async addOrder(order) {
         await this.execute(`INSERT INTO orders (id, listingId, listingTitle, buyerId, buyerName, sellerId, sellerName, price, status, paymentStatus, paymentLockedAt, deliveryDetails, confirmationDeadline, createdAt, updatedAt, notes, transactionIds) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`, [
