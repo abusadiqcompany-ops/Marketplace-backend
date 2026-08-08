@@ -34,7 +34,7 @@ export class WalletService {
     async addDeposit(userId, amount, paymentGateway, reference) {
         const existing = await db.getTransactionsByReference(reference);
         if (existing) {
-            if (existing.type === 'deposit') {
+            if (existing.type === 'deposit' && existing.userId === userId) {
                 return existing;
             }
             throw new Error('Duplicate transaction reference');
@@ -132,7 +132,7 @@ export class OrderService {
     async lockPayment(orderId, userId, amount, paymentGateway, reference) {
         const existing = await db.getTransactionsByReference(reference);
         if (existing) {
-            if (existing.type === 'payment_locked') {
+            if (existing.type === 'payment_locked' && existing.orderId === orderId && existing.userId === userId) {
                 return existing;
             }
             throw new Error('Duplicate transaction reference');

@@ -515,6 +515,20 @@ app.get('/api/listings/seller/:sellerId', asyncHandler(async (req, res) => {
     const listings = await db.getListingsBySeller(req.params.sellerId);
     res.json(listings);
 }));
+app.delete('/api/listings/:id', verifyAuthToken, asyncHandler(async (req, res) => {
+    const listing = await db.getListing(req.params.id);
+    if (!listing) {
+        return res.status(404).json({ error: 'Listing not found' });
+    }
+    if (listing.sellerId !== req.userId && req.user?.role !== 'admin') {
+        return res.status(403).json({ error: 'Unauthorized' });
+    }
+    const deleted = await db.deleteListing(req.params.id);
+    if (!deleted) {
+        return res.status(500).json({ error: 'Unable to delete listing' });
+    }
+    res.json({ success: true });
+}));
 app.get('/listing/new', (req, res) => {
     const frontendUrl = getFrontendUrl();
     res.redirect(`${frontendUrl}/listing/new`);
