@@ -269,6 +269,17 @@ export class Database {
     }
   }
 
+  private async ensureUniqueIndex(tableName: string, indexName: string, columnName: string): Promise<void> {
+    const [rows] = await this.pool.query<RowDataPacket[]>(
+      'SELECT INDEX_NAME FROM INFORMATION_SCHEMA.STATISTICS WHERE TABLE_SCHEMA = DATABASE() AND TABLE_NAME = ? AND INDEX_NAME = ?',
+      [tableName, indexName]
+    );
+
+    if (!rows.length) {
+      await this.pool.query(`CREATE UNIQUE INDEX \`${indexName}\` ON \`${tableName}\` (\`${columnName}\`)`);
+    }
+  }
+
   async init(): Promise<void> {
     if (this.initialized) return;
 
@@ -397,9 +408,7 @@ export class Database {
       )
     `);
 
-    await this.pool.query(`
-      CREATE UNIQUE INDEX IF NOT EXISTS idx_transactions_reference ON transactions(reference)
-    `);
+    await this.ensureUniqueIndex('transactions', 'idx_transactions_reference', 'reference');
 
     await this.pool.query(`
       CREATE TABLE IF NOT EXISTS wallets (

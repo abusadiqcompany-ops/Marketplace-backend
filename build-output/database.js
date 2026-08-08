@@ -79,6 +79,12 @@ export class Database {
             await this.pool.query('ALTER TABLE users MODIFY avatar MEDIUMTEXT NULL');
         }
     }
+    async ensureUniqueIndex(tableName, indexName, columnName) {
+        const [rows] = await this.pool.query('SELECT INDEX_NAME FROM INFORMATION_SCHEMA.STATISTICS WHERE TABLE_SCHEMA = DATABASE() AND TABLE_NAME = ? AND INDEX_NAME = ?', [tableName, indexName]);
+        if (!rows.length) {
+            await this.pool.query(`CREATE UNIQUE INDEX \`${indexName}\` ON \`${tableName}\` (\`${columnName}\`)`);
+        }
+    }
     async init() {
         if (this.initialized)
             return;
@@ -200,9 +206,7 @@ export class Database {
         metadata JSON NULL
       )
     `);
-        await this.pool.query(`
-      CREATE UNIQUE INDEX IF NOT EXISTS idx_transactions_reference ON transactions(reference)
-    `);
+        await this.ensureUniqueIndex('transactions', 'idx_transactions_reference', 'reference');
         await this.pool.query(`
       CREATE TABLE IF NOT EXISTS wallets (
         id VARCHAR(36) PRIMARY KEY,
