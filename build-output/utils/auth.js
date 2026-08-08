@@ -1,6 +1,6 @@
 import jwt from 'jsonwebtoken';
 import bcryptjs from 'bcryptjs';
-const JWT_SECRET = process.env.JWT_SECRET || 'your-super-secret-key-change-in-production';
+const JWT_SECRET = process.env.JWT_SECRET || 'mySuperSecureSecret2026!@#_marketplace_app';
 const JWT_EXPIRY = '7d';
 /**
  * Generate JWT token
