@@ -51,6 +51,14 @@ export class WalletService {
     paymentGateway: 'paystack' | 'flutterwave' | 'manual',
     reference: string
   ): Promise<Transaction> {
+    const existing = await db.getTransactionsByReference(reference);
+    if (existing) {
+      if (existing.type === 'deposit' && existing.userId === userId) {
+        return existing;
+      }
+      throw new Error('Duplicate transaction reference');
+    }
+
     const transaction: Transaction = {
       id: uuidv4(),
       type: 'deposit',
@@ -180,6 +188,14 @@ export class OrderService {
     paymentGateway: 'paystack' | 'flutterwave',
     reference: string
   ): Promise<Transaction> {
+    const existing = await db.getTransactionsByReference(reference);
+    if (existing) {
+      if (existing.type === 'payment_locked' && existing.orderId === orderId && existing.userId === userId) {
+        return existing;
+      }
+      throw new Error('Duplicate transaction reference');
+    }
+
     const order = await db.getOrder(orderId);
     if (!order) {
       throw new Error('Order not found');

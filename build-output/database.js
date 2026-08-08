@@ -201,6 +201,9 @@ export class Database {
       )
     `);
         await this.pool.query(`
+      CREATE UNIQUE INDEX IF NOT EXISTS idx_transactions_reference ON transactions(reference)
+    `);
+        await this.pool.query(`
       CREATE TABLE IF NOT EXISTS wallets (
         id VARCHAR(36) PRIMARY KEY,
         userId VARCHAR(36) NOT NULL UNIQUE,

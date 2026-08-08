@@ -62,6 +62,16 @@ app.use(cors(corsOptions));
 app.options('*', cors(corsOptions));
 app.use(express.json({ limit: '1gb' }));
 app.use(express.urlencoded({ extended: true, limit: '1gb' }));
+// Prevent caching for API responses so clients always receive fresh data
+app.use((req, res, next) => {
+    if (req.path.startsWith('/api/')) {
+        res.setHeader('Cache-Control', 'no-store, no-cache, must-revalidate, proxy-revalidate');
+        res.setHeader('Pragma', 'no-cache');
+        res.setHeader('Expires', '0');
+        res.setHeader('Surrogate-Control', 'no-store');
+    }
+    next();
+});
 app.use((req, _res, next) => {
     if (req.path === '/' || req.path === '/health' || req.path.startsWith('/api/')) {
         next();
@@ -726,8 +736,7 @@ app.post('/api/payments/paystack/webhook', express.raw({ type: '*/*', limit: '1m
             return res.status(400).send('Invalid signature');
         }
         const event = JSON.parse(req.body.toString('utf8'));
-        if (process.env.NODE_ENV !== 'production')
-            console.debug('[paystack webhook] event:', event?.event);
+        console.info('[paystack webhook] received event:', event?.event);
         const eventType = event?.event;
         // Handle successful charge events and update orders/wallets accordingly
         if (eventType === 'charge.success' || eventType === 'charge.completed') {
@@ -735,8 +744,10 @@ app.post('/api/payments/paystack/webhook', express.raw({ type: '*/*', limit: '1m
             const reference = data.reference;
             try {
                 const verification = await paystackService.verifyTransaction(reference);
+                console.info('[paystack webhook] verification:', { reference, status: verification.status });
                 if (verification.status) {
                     const { email, amount, orderId, userId } = verification.data?.metadata || {};
+                    console.info('[paystack webhook] metadata:', { email, amount, orderId, userId });
                     if (orderId && userId) {
                         await orderService.lockPayment(orderId, userId, amount / 100, 'paystack', reference);
                     }
@@ -769,6 +780,48 @@ app.post('/api/payments/flutterwave/initialize', verifyAuthToken, asyncHandler(a
     });
     res.json(paymentData);
 }));
+app.post('/api/payments/flutterwave/webhook', express.raw({ type: '*/*', limit: '1mb' }), async (req, res) => {
+    try {
+        const signature = (req.headers['verif-hash'] || req.headers['x-flw-signature']);
+        const secret = process.env.FLUTTERWAVE_SECRET_KEY || '';
+        const computed = crypto.createHmac('sha256', secret).update(req.body).digest('hex');
+        if (!signature || signature !== computed) {
+            console.warn('[flutterwave webhook] invalid signature');
+            return res.status(400).send('Invalid signature');
+        }
+        const event = JSON.parse(req.body.toString('utf8'));
+        console.info('[flutterwave webhook] received event:', event?.event || event?.data?.event);
+        const data = event.data || {};
+        const reference = data.tx_ref || data.reference;
+        const status = data.status || data?.payment_status;
+        if (status !== 'successful' && status !== 'success') {
+            console.info('[flutterwave webhook] payment not successful', { reference, status });
+            return res.sendStatus(200);
+        }
+        try {
+            const verification = await flutterwaveService.verifyTransaction(reference);
+            console.info('[flutterwave webhook] verification:', { reference, status: verification.status });
+            if (verification.status) {
+                const verifiedData = verification.data || {};
+                const userId = verifiedData.meta?.userId;
+                const type = verifiedData.meta?.type;
+                const amount = Number(verifiedData.amount);
+                console.info('[flutterwave webhook] metadata:', { userId, type, amount });
+                if (userId && type === 'wallet_deposit') {
+                    await walletService.addDeposit(userId, amount, 'flutterwave', reference);
+                }
+            }
+        }
+        catch (err) {
+            console.error('[flutterwave webhook] processing error', err);
+        }
+        res.sendStatus(200);
+    }
+    catch (err) {
+        console.error('[flutterwave webhook] error', err);
+        res.sendStatus(500);
+    }
+});
 app.get('/api/payments/flutterwave/verify/:txRef', verifyAuthToken, asyncHandler(async (req, res) => {
     const verification = await flutterwaveService.verifyTransaction(req.params.txRef);
     if (verification.status) {
@@ -824,55 +877,47 @@ app.post('/api/deposit/verify', verifyAuthToken, asyncHandler(async (req, res) =
     if (!provider || !reference) {
         return res.status(400).json({ error: 'Missing provider or reference' });
     }
+    // Log incoming verify attempts for observability in production
+    console.info('[deposit/verify] attempt:', { provider, reference, requester: req.userId });
     if (provider === 'paystack') {
         const verification = await paystackService.verifyTransaction(reference);
+        console.info('[deposit/verify] paystack verify result:', { reference, status: verification.status, message: verification.message });
         if (!verification.status) {
             return res.status(400).json({ verified: false, error: verification.message });
         }
         const { amount, metadata } = verification.data || {};
         const { userId, type } = metadata || {};
+        console.info('[deposit/verify] paystack metadata:', { metadata });
         if (!userId || userId !== req.userId || type !== 'wallet_deposit') {
+            console.info('[deposit/verify] paystack metadata mismatch', { userId, expected: req.userId, type });
             return res.status(403).json({ error: 'Unauthorized or invalid deposit metadata' });
         }
         const depositAmount = Number(amount) / 100;
-        if (process.env.NODE_ENV !== 'production') {
-            console.debug('[wallet deposit] verify paystack:', {
-                reference,
-                depositAmount,
-                metadata,
-                userId,
-                type,
-            });
-        }
         const transaction = await walletService.addDeposit(userId, depositAmount, 'paystack', reference);
         const balance = await walletService.getBalance(userId);
-        res.json({ verified: true, transaction, balance });
+        console.info('[deposit/verify] paystack deposit recorded', { userId, depositAmount, balance });
+        res.json({ success: true, verified: true, transaction, balance });
         return;
     }
     if (provider === 'flutterwave') {
         const verification = await flutterwaveService.verifyTransaction(reference);
+        console.info('[deposit/verify] flutterwave verify result:', { reference, status: verification.status, message: verification.message });
         if (!verification.status) {
             return res.status(400).json({ verified: false, error: verification.message });
         }
         const data = verification.data || {};
         const userId = data.meta?.userId;
         const type = data.meta?.type;
+        console.info('[deposit/verify] flutterwave metadata:', { meta: data.meta });
         if (!userId || userId !== req.userId || type !== 'wallet_deposit') {
+            console.info('[deposit/verify] flutterwave metadata mismatch', { userId, expected: req.userId, type });
             return res.status(403).json({ error: 'Unauthorized or invalid deposit metadata' });
         }
         const depositAmount = Number(data.amount);
-        if (process.env.NODE_ENV !== 'production') {
-            console.debug('[wallet deposit] verify flutterwave:', {
-                reference,
-                depositAmount,
-                dataMeta: data.meta,
-                userId,
-                type,
-            });
-        }
         const transaction = await walletService.addDeposit(userId, depositAmount, 'flutterwave', reference);
         const balance = await walletService.getBalance(userId);
-        res.json({ verified: true, transaction, balance });
+        console.info('[deposit/verify] flutterwave deposit recorded', { userId, depositAmount, balance });
+        res.json({ success: true, verified: true, transaction, balance });
         return;
     }
     res.status(400).json({ error: 'Unsupported provider' });

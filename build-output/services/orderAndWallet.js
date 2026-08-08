@@ -32,6 +32,13 @@ export class WalletService {
         }
     }
     async addDeposit(userId, amount, paymentGateway, reference) {
+        const existing = await db.getTransactionsByReference(reference);
+        if (existing) {
+            if (existing.type === 'deposit') {
+                return existing;
+            }
+            throw new Error('Duplicate transaction reference');
+        }
         const transaction = {
             id: uuidv4(),
             type: 'deposit',
@@ -123,6 +130,13 @@ export class OrderService {
      * Lock payment (buyer pays, money goes to escrow)
      */
     async lockPayment(orderId, userId, amount, paymentGateway, reference) {
+        const existing = await db.getTransactionsByReference(reference);
+        if (existing) {
+            if (existing.type === 'payment_locked') {
+                return existing;
+            }
+            throw new Error('Duplicate transaction reference');
+        }
         const order = await db.getOrder(orderId);
         if (!order) {
             throw new Error('Order not found');
