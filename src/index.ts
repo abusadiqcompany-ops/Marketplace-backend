@@ -1439,14 +1439,14 @@ app.get('/api/chat/stream', (req: Request, res: Response) => {
 });
 
 app.post('/api/chat/messages', asyncHandler(async (req: Request, res: Response) => {
-  const { senderId, senderName, content, recipientId, listingId } = req.body || {};
+  const { senderId, senderName, content, image, recipientId, listingId } = req.body || {};
 
-  if (!senderId || !senderName || !content || !recipientId) {
-    return res.status(400).json({ error: 'senderId, senderName, content, and recipientId are required' });
+  if (!senderId || !senderName || !recipientId || (!content && !image)) {
+    return res.status(400).json({ error: 'senderId, senderName, recipientId, and either content or image are required' });
   }
 
   const chatId = deriveChatId(senderId, recipientId, listingId);
-  const message = createChatMessage({ chatId, senderId, senderName, content });
+  const message = createChatMessage({ chatId, senderId, senderName, content: content || '', image });
   chatMessages.push(message);
   broadcastChatMessage(message);
 
