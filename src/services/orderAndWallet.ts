@@ -54,6 +54,27 @@ export class WalletService {
     const existing = await db.getTransactionsByReference(reference);
     if (existing) {
       if (existing.type === 'deposit' && existing.userId === userId) {
+        // Ensure idempotent behavior: if the transaction was recorded earlier
+        // but the wallet was not updated (e.g. partial failure), apply the
+        // deposit to the wallet and record the transaction id on the wallet.
+        try {
+          const wallet = await this.getOrCreateWallet(userId);
+          const txs = wallet.transactions || [];
+          const alreadyRecorded = txs.some(t => t.id === existing.id);
+          if (!alreadyRecorded) {
+            const updatedTxs = [...txs, existing];
+            await db.updateWallet(userId, {
+              balance: wallet.balance + existing.amount,
+              transactions: updatedTxs,
+            });
+            await this.syncWalletBalanceToUser(userId);
+          }
+        } catch (err) {
+          // Log but do not fail - return the existing transaction so caller
+          // can proceed. Backend error visibility will show up in logs.
+          console.error('[wallet addDeposit] idempotent sync failed', err);
+        }
+
         return existing;
       }
       throw new Error('Duplicate transaction reference');
@@ -75,10 +96,12 @@ export class WalletService {
 
     await db.addTransaction(transaction);
 
-    // Update wallet balance
+    // Update wallet balance and attach transaction id for idempotency
     const wallet = await this.getOrCreateWallet(userId);
+    const nextTxs = [...(wallet.transactions || []), transaction];
     await db.updateWallet(userId, {
       balance: wallet.balance + amount,
+      transactions: nextTxs,
     });
     await this.syncWalletBalanceToUser(userId);
 
