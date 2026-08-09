@@ -4,6 +4,7 @@ export interface ChatMessagePayload {
     senderId: string;
     senderName: string;
     content: string;
+    image?: string;
     timestamp?: string;
 }
 export interface ChatMessageRecord extends ChatMessagePayload {
