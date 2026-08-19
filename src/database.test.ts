@@ -19,3 +19,20 @@ test('deleteListing returns false when no listing is removed', async () => {
 
   assert.equal(deleted, false);
 });
+
+test('deleteUser anonymizes the account email instead of deleting the record', async () => {
+  const db = Object.create(Database.prototype) as any;
+  let capturedParams: string[] | undefined;
+
+  db.getUser = async () => ({ id: 'user-1', email: 'old@example.com' });
+  db.execute = async (_sql: string, params: string[]) => {
+    capturedParams = params;
+    return { affectedRows: 1 };
+  };
+
+  const deleted = await Database.prototype.deleteUser.call(db, 'user-1');
+
+  assert.equal(deleted, true);
+  assert.ok(capturedParams);
+  assert.equal(capturedParams?.[1], 'deleted.user-1@deleted.local');
+});

@@ -10,6 +10,7 @@ export function createChatMessage(payload) {
         senderId: payload.senderId,
         senderName: payload.senderName,
         content: payload.content,
+        image: payload.image,
         timestamp: payload.timestamp || new Date().toISOString(),
     };
 }

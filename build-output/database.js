@@ -622,7 +622,37 @@ export class Database {
         return merged;
     }
     async deleteUser(id) {
-        const result = await this.execute('DELETE FROM users WHERE id = ?', [id]);
+        const user = await this.getUser(id);
+        if (!user)
+            return false;
+        const deletedEmail = `deleted.${id}@deleted.local`;
+        const result = await this.execute(`UPDATE users SET
+        name = ?,
+        email = ?,
+        password = NULL,
+        avatar = NULL,
+        accountNumber = NULL,
+        phone = NULL,
+        businessName = NULL,
+        description = NULL,
+        sellerLocation = NULL,
+        paymentMethods = NULL,
+        verified = FALSE,
+        verificationLevel = 'unverified',
+        verificationBadgeType = NULL,
+        verificationRequestStatus = 'pending',
+        verificationFee = 0,
+        emailVerified = FALSE,
+        phoneVerified = FALSE,
+        emailOtp = NULL,
+        phoneOtp = NULL,
+        otpExpiresAt = NULL,
+        updatedAt = CURRENT_TIMESTAMP
+      WHERE id = ?`, [
+            `Deleted User ${id.slice(0, 8)}`,
+            deletedEmail,
+            id,
+        ]);
         return result.affectedRows > 0;
     }
     async deleteListing(id) {
