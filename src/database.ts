@@ -49,6 +49,9 @@ export interface User {
   paymentMethods?: PaymentMethod[];
   verified: boolean;
   verificationLevel: 'unverified' | 'basic' | 'full';
+  verificationBadgeType?: 'active_member' | 'verified_seller';
+  verificationRequestStatus?: 'pending' | 'paid' | 'approved';
+  verificationFee?: number;
   emailVerified?: boolean;
   phoneVerified?: boolean;
   emailOtp?: string;
@@ -239,6 +242,9 @@ export class Database {
 
   private async ensureUserVerificationColumns(): Promise<void> {
     const requiredColumns = [
+      { name: 'verificationBadgeType', definition: 'VARCHAR(30) NULL DEFAULT NULL' },
+      { name: 'verificationRequestStatus', definition: 'VARCHAR(20) NOT NULL DEFAULT "pending"' },
+      { name: 'verificationFee', definition: 'DECIMAL(12,2) NOT NULL DEFAULT 0' },
       { name: 'emailVerified', definition: 'BOOLEAN NOT NULL DEFAULT FALSE' },
       { name: 'phoneVerified', definition: 'BOOLEAN NOT NULL DEFAULT FALSE' },
       { name: 'emailOtp', definition: 'VARCHAR(10) NULL' },
@@ -302,6 +308,9 @@ export class Database {
         paymentMethods JSON NULL,
         verified BOOLEAN NOT NULL DEFAULT FALSE,
         verificationLevel VARCHAR(20) NOT NULL DEFAULT 'unverified',
+        verificationBadgeType VARCHAR(30) NULL DEFAULT NULL,
+        verificationRequestStatus VARCHAR(20) NOT NULL DEFAULT 'pending',
+        verificationFee DECIMAL(12,2) NOT NULL DEFAULT 0,
         emailVerified BOOLEAN NOT NULL DEFAULT FALSE,
         phoneVerified BOOLEAN NOT NULL DEFAULT FALSE,
         emailOtp VARCHAR(10) NULL,
@@ -491,6 +500,9 @@ export class Database {
       paymentMethods: this.parseJson<PaymentMethod[]>(row.paymentMethods),
       verified: Boolean(row.verified),
       verificationLevel: row.verificationLevel,
+      verificationBadgeType: row.verificationBadgeType || undefined,
+      verificationRequestStatus: row.verificationRequestStatus || 'pending',
+      verificationFee: row.verificationFee !== null && row.verificationFee !== undefined ? Number(row.verificationFee) : 0,
       emailVerified: Boolean(row.emailVerified),
       phoneVerified: Boolean(row.phoneVerified),
       emailOtp: row.emailOtp || undefined,
@@ -607,7 +619,7 @@ export class Database {
 
   async addUser(user: User): Promise<User> {
     await this.execute(
-      `INSERT INTO users (id, name, email, password, role, avatar, walletBalance, accountNumber, location, buyerPreferences, businessName, description, phone, sellerLocation, paymentMethods, verified, verificationLevel, emailVerified, phoneVerified, emailOtp, phoneOtp, otpExpiresAt, createdAt, updatedAt) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ? )`,
+      `INSERT INTO users (id, name, email, password, role, avatar, walletBalance, accountNumber, location, buyerPreferences, businessName, description, phone, sellerLocation, paymentMethods, verified, verificationLevel, verificationBadgeType, verificationRequestStatus, verificationFee, emailVerified, phoneVerified, emailOtp, phoneOtp, otpExpiresAt, createdAt, updatedAt) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ? )`,
       [
         user.id,
         user.name,
@@ -626,6 +638,9 @@ export class Database {
         this.stringifyJson(user.paymentMethods),
         user.verified ? 1 : 0,
         user.verificationLevel,
+        user.verificationBadgeType || null,
+        user.verificationRequestStatus || 'pending',
+        user.verificationFee ?? 0,
         user.emailVerified ? 1 : 0,
         user.phoneVerified ? 1 : 0,
         user.emailOtp || null,
@@ -654,7 +669,7 @@ export class Database {
 
     const merged = { ...existing, ...updates, updatedAt: new Date().toISOString() };
     await this.execute(
-      `UPDATE users SET name = ?, email = ?, password = ?, role = ?, avatar = ?, walletBalance = ?, accountNumber = ?, location = ?, buyerPreferences = ?, businessName = ?, description = ?, phone = ?, sellerLocation = ?, paymentMethods = ?, verified = ?, verificationLevel = ?, emailVerified = ?, phoneVerified = ?, emailOtp = ?, phoneOtp = ?, otpExpiresAt = ?, updatedAt = ? WHERE id = ?`,
+      `UPDATE users SET name = ?, email = ?, password = ?, role = ?, avatar = ?, walletBalance = ?, accountNumber = ?, location = ?, buyerPreferences = ?, businessName = ?, description = ?, phone = ?, sellerLocation = ?, paymentMethods = ?, verified = ?, verificationLevel = ?, verificationBadgeType = ?, verificationRequestStatus = ?, verificationFee = ?, emailVerified = ?, phoneVerified = ?, emailOtp = ?, phoneOtp = ?, otpExpiresAt = ?, updatedAt = ? WHERE id = ?`,
       [
         merged.name,
         merged.email,
@@ -672,6 +687,9 @@ export class Database {
         this.stringifyJson(merged.paymentMethods),
         merged.verified ? 1 : 0,
         merged.verificationLevel,
+        merged.verificationBadgeType || null,
+        merged.verificationRequestStatus || 'pending',
+        merged.verificationFee ?? 0,
         merged.emailVerified ? 1 : 0,
         merged.phoneVerified ? 1 : 0,
         merged.emailOtp || null,

@@ -32,6 +32,9 @@ export interface User {
     paymentMethods?: PaymentMethod[];
     verified: boolean;
     verificationLevel: 'unverified' | 'basic' | 'full';
+    verificationBadgeType?: 'active_member' | 'verified_seller';
+    verificationRequestStatus?: 'pending' | 'paid' | 'approved';
+    verificationFee?: number;
     emailVerified?: boolean;
     phoneVerified?: boolean;
     emailOtp?: string;

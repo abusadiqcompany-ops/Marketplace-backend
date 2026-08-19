@@ -335,6 +335,9 @@ app.post('/api/admin/users/:id/verify-membership/verify', verifyAuthToken, requi
         const updatedUser = await db.updateUser(user.id, {
             verified: true,
             verificationLevel: 'basic',
+            verificationBadgeType: user.verificationBadgeType || 'active_member',
+            verificationRequestStatus: 'approved',
+            verificationFee: Number(user.verificationFee || metadata.amount || 0),
             walletBalance: Number(user.walletBalance || 0) + Number(metadata.amount || 0),
         });
         return res.json({ verified: true, user: updatedUser, amount: Number(metadata.amount || 0) });
@@ -352,11 +355,33 @@ app.post('/api/admin/users/:id/verify-membership/verify', verifyAuthToken, requi
         const updatedUser = await db.updateUser(user.id, {
             verified: true,
             verificationLevel: 'basic',
+            verificationBadgeType: user.verificationBadgeType || 'active_member',
+            verificationRequestStatus: 'approved',
+            verificationFee: Number(user.verificationFee || metadata.amount || 0),
             walletBalance: Number(user.walletBalance || 0) + Number(metadata.amount || 0),
         });
         return res.json({ verified: true, user: updatedUser, amount: Number(metadata.amount || 0) });
     }
     res.status(400).json({ error: 'Unsupported provider' });
+}));
+app.post('/api/admin/users/:id/approve-verification', verifyAuthToken, requireRole('admin'), asyncHandler(async (req, res) => {
+    const { badgeType, verificationFee } = req.body;
+    const user = await db.getUser(req.params.id);
+    if (!user) {
+        return res.status(404).json({ error: 'User not found' });
+    }
+    const nextBadgeType = badgeType === 'verified_seller' ? 'verified_seller' : 'active_member';
+    const updatedUser = await db.updateUser(user.id, {
+        verified: true,
+        verificationLevel: nextBadgeType === 'verified_seller' ? 'full' : 'basic',
+        verificationBadgeType: nextBadgeType,
+        verificationRequestStatus: 'approved',
+        verificationFee: Number(verificationFee ?? user.verificationFee ?? 0),
+    });
+    if (!updatedUser) {
+        return res.status(500).json({ error: 'Unable to save verification approval' });
+    }
+    return res.json({ verified: true, user: updatedUser });
 }));
 app.delete('/api/admin/users/:id', verifyAuthToken, requireRole('admin'), asyncHandler(async (req, res) => {
     const deleted = await db.deleteUser(req.params.id);
