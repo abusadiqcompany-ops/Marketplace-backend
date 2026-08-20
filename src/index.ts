@@ -71,7 +71,14 @@ const corsOptions = {
 
 app.use(cors(corsOptions));
 app.options('*', cors(corsOptions));
-app.use(express.json({ limit: '1gb' }));
+app.use(express.json({
+  limit: '1gb',
+  verify: (req: Request, _res: Response, buffer: Buffer) => {
+    if (req.path === '/api/payments/paystack/webhook' || req.path === '/api/payments/flutterwave/webhook') {
+      (req as Request & { rawBody?: Buffer }).rawBody = Buffer.from(buffer);
+    }
+  },
+}));
 app.use(express.urlencoded({ extended: true, limit: '1gb' }));
 // Prevent caching for API responses so clients always receive fresh data
 app.use((req: Request, res: Response, next: NextFunction) => {
@@ -1017,13 +1024,18 @@ app.post(
     try {
       const signature = (req.headers['x-paystack-signature'] || req.headers['X-Paystack-Signature']) as string | undefined;
       const secret = process.env.PAYSTACK_SECRET_KEY || '';
-      const computed = crypto.createHmac('sha512', secret).update(req.body as Buffer).digest('hex');
+      const rawBody = (req as Request & { rawBody?: Buffer }).rawBody || (Buffer.isBuffer(req.body) ? req.body : null);
+      if (!rawBody) {
+        console.error('[paystack webhook] raw request body unavailable');
+        return res.status(400).send('Invalid request body');
+      }
+      const computed = crypto.createHmac('sha512', secret).update(rawBody).digest('hex');
       if (!signature || signature !== computed) {
         console.warn('[paystack webhook] invalid signature');
         return res.status(400).send('Invalid signature');
       }
 
-      const event = JSON.parse((req.body as Buffer).toString('utf8'));
+      const event = JSON.parse(rawBody.toString('utf8'));
       console.info('[paystack webhook] received event:', event?.event);
 
       const eventType = event?.event;
@@ -1085,13 +1097,18 @@ app.post(
     try {
       const signature = (req.headers['verif-hash'] || req.headers['x-flw-signature']) as string | undefined;
       const secret = process.env.FLUTTERWAVE_SECRET_KEY || '';
-      const computed = crypto.createHmac('sha256', secret).update(req.body as Buffer).digest('hex');
+      const rawBody = (req as Request & { rawBody?: Buffer }).rawBody || (Buffer.isBuffer(req.body) ? req.body : null);
+      if (!rawBody) {
+        console.error('[flutterwave webhook] raw request body unavailable');
+        return res.status(400).send('Invalid request body');
+      }
+      const computed = crypto.createHmac('sha256', secret).update(rawBody).digest('hex');
       if (!signature || signature !== computed) {
         console.warn('[flutterwave webhook] invalid signature');
         return res.status(400).send('Invalid signature');
       }
 
-      const event = JSON.parse((req.body as Buffer).toString('utf8'));
+      const event = JSON.parse(rawBody.toString('utf8'));
       console.info('[flutterwave webhook] received event:', event?.event || event?.data?.event);
 
       const data = event.data || {};
