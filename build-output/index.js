@@ -987,12 +987,15 @@ app.post('/api/deposit/verify', verifyAuthToken, asyncHandler(async (req, res) =
         const verification = await paystackService.verifyTransaction(reference);
         console.info('[deposit/verify] paystack verify result:', { reference, status: verification.status, message: verification.message });
         if (!verification.status) {
-            return res.status(400).json({ verified: false, error: verification.message });
+            return res.status(400).json({
+                verified: false,
+                error: verification.message || 'Paystack has not marked this transaction as successful yet.',
+            });
         }
         const verifiedData = verification.data || {};
         const { metadata } = verifiedData;
         const { userId, type } = metadata || {};
-        console.info('[deposit/verify] paystack metadata:', { metadata });
+        console.info('[deposit/verify] paystack metadata:', { metadata, amount: verifiedData.amount });
         if (!userId || userId !== req.userId || type !== 'wallet_deposit') {
             console.info('[deposit/verify] paystack metadata mismatch', { userId, expected: req.userId, type });
             return res.status(403).json({ error: 'Unauthorized or invalid deposit metadata' });
