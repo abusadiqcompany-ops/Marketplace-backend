@@ -87,7 +87,7 @@ export class WalletService {
     /**
      * Withdraw money from wallet
      */
-    async initiateWithdrawal(userId, amount, bankDetails) {
+    async initiateWithdrawal(userId, amount, bankDetails, reference, metadata) {
         const wallet = await this.getOrCreateWallet(userId);
         if (wallet.balance < amount) {
             throw new Error('Insufficient wallet balance');
@@ -99,10 +99,10 @@ export class WalletService {
             amount,
             status: 'processing',
             currency: 'NGN',
-            reference: `WTH_${Date.now()}`,
+            reference: reference || `WTH_${Date.now()}`,
             createdAt: new Date().toISOString(),
             details: `Withdrawal to account ending in ${bankDetails.accountNumber.slice(-4)}`,
-            metadata: bankDetails,
+            metadata: { ...bankDetails, ...metadata },
         };
         await db.addTransaction(transaction);
         // Deduct from wallet (but mark as processing, not completed)

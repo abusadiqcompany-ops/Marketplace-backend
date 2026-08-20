@@ -117,6 +117,25 @@ const flutterwaveService = new FlutterwaveService(
   process.env.FLUTTERWAVE_PUBLIC_KEY || ''
 );
 
+const PAYSTACK_BANK_CODES: Record<string, string> = {
+  'GTBank': '058',
+  'Zenith Bank': '057',
+  'Access Bank': '044',
+  'UBA': '033',
+  'Kuda': '090267',
+  'OPay': '100004',
+  'First Bank': '011',
+  'Fidelity Bank': '070',
+  'EcoBank': '050',
+  'Union Bank': '032',
+  'Stanbic IBTC': '221',
+  'Sterling Bank': '232',
+  'Polaris Bank': '076',
+  'Keystone Bank': '082',
+  'Wema Bank': '035',
+  'FCMB': '214',
+};
+
 const broadcastChatMessage = (message: ChatMessageRecord) => {
   const subscribers = chatSubscribers.get(message.chatId);
   if (!subscribers?.size) return;
@@ -935,8 +954,9 @@ app.post(
   verifyAuthToken,
   asyncHandler(async (req: AuthRequest, res: Response) => {
     const { amount, bankName, accountHolderName, accountNumber } = req.body;
+    const withdrawalAmount = Number(amount);
 
-    if (!amount || amount <= 0) {
+    if (!Number.isFinite(withdrawalAmount) || withdrawalAmount <= 0) {
       return res.status(400).json({ error: 'Invalid withdrawal amount' });
     }
 
@@ -944,17 +964,50 @@ app.post(
       return res.status(400).json({ error: 'Missing bank details' });
     }
 
-    const transaction = await walletService.initiateWithdrawal(
-      req.userId!,
-      amount,
-      {
-        accountNumber,
-        bankCode: bankName,
-        accountName: accountHolderName,
-      }
+    if (!/^[0-9]{10}$/.test(String(accountNumber))) {
+      return res.status(400).json({ error: 'Account number must be a 10-digit NUBAN' });
+    }
+
+    const bankCode = PAYSTACK_BANK_CODES[bankName] || (/^\d+$/.test(String(bankName)) ? String(bankName) : '');
+    if (!bankCode) {
+      return res.status(400).json({ error: 'Unsupported bank. Please select a supported Nigerian bank.' });
+    }
+
+    if (!process.env.PAYSTACK_SECRET_KEY?.trim()) {
+      return res.status(503).json({ error: 'Bank withdrawals are not configured. Set PAYSTACK_SECRET_KEY first.' });
+    }
+
+    const currentBalance = await walletService.getBalance(req.userId!);
+    if (currentBalance < withdrawalAmount) {
+      return res.status(400).json({ error: 'Insufficient wallet balance' });
+    }
+
+    const recipient = await paystackService.createTransferRecipient(
+      'nuban',
+      String(accountNumber),
+      bankCode,
+      String(accountHolderName)
+    );
+    const transfer = await paystackService.initiateTransfer(
+      recipient.recipient_code,
+      withdrawalAmount,
+      `MarketConnect wallet withdrawal for ${req.userId}`
     );
 
-    res.status(201).json(transaction);
+    const transaction = await walletService.initiateWithdrawal(
+      req.userId!,
+      withdrawalAmount,
+      {
+        accountNumber,
+        bankCode,
+        accountName: accountHolderName,
+      },
+      transfer.reference,
+      { transferCode: transfer.transfer_code, bankName }
+    );
+
+    const balance = await walletService.getBalance(req.userId!);
+    res.status(201).json({ transaction, balance, transfer });
   })
 );
 
@@ -962,6 +1015,9 @@ app.get(
   '/api/wallet/:userId/transactions',
   verifyAuthToken,
   asyncHandler(async (req: AuthRequest, res: Response) => {
+    if (req.params.userId !== req.userId) {
+      return res.status(403).json({ error: 'Unauthorized' });
+    }
     const transactions = await walletService.getTransactionHistory(req.params.userId);
     res.json(transactions);
   })

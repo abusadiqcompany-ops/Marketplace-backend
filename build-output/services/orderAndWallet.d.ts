@@ -16,7 +16,7 @@ export declare class WalletService {
         accountNumber: string;
         bankCode: string;
         accountName: string;
-    }): Promise<Transaction>;
+    }, reference?: string, metadata?: Record<string, any>): Promise<Transaction>;
     /**
      * Get wallet balance
      */

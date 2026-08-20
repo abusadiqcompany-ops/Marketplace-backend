@@ -118,7 +118,9 @@ export class WalletService {
       accountNumber: string;
       bankCode: string;
       accountName: string;
-    }
+    },
+    reference?: string,
+    metadata?: Record<string, any>
   ): Promise<Transaction> {
     const wallet = await this.getOrCreateWallet(userId);
 
@@ -133,10 +135,10 @@ export class WalletService {
       amount,
       status: 'processing',
       currency: 'NGN',
-      reference: `WTH_${Date.now()}`,
+      reference: reference || `WTH_${Date.now()}`,
       createdAt: new Date().toISOString(),
       details: `Withdrawal to account ending in ${bankDetails.accountNumber.slice(-4)}`,
-      metadata: bankDetails,
+      metadata: { ...bankDetails, ...metadata },
     };
 
     await db.addTransaction(transaction);
