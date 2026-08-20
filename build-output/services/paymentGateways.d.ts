@@ -1,7 +1,14 @@
 export declare class PaystackService {
     private baseUrl;
     private secretKey;
+    private bankCache;
+    private bankCacheExpiresAt;
     constructor(secretKey: string);
+    getBanks(): Promise<Array<{
+        name: string;
+        code: string;
+    }>>;
+    resolveBankCode(bankName: string): Promise<string | undefined>;
     initializeTransaction(email: string, amount: number, metadata: Record<string, any>, callbackUrl?: string): Promise<{
         authorization_url: string;
         access_code: string;

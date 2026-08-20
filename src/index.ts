@@ -968,7 +968,12 @@ app.post(
       return res.status(400).json({ error: 'Account number must be a 10-digit NUBAN' });
     }
 
-    const bankCode = PAYSTACK_BANK_CODES[bankName] || (/^\d+$/.test(String(bankName)) ? String(bankName) : '');
+    let bankCode = '';
+    if (/^\d+$/.test(String(bankName))) {
+      bankCode = String(bankName);
+    } else {
+      bankCode = await paystackService.resolveBankCode(String(bankName)) || PAYSTACK_BANK_CODES[bankName] || '';
+    }
     if (!bankCode) {
       return res.status(400).json({ error: 'Unsupported bank. Please select a supported Nigerian bank.' });
     }

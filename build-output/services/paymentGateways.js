@@ -14,7 +14,41 @@ const describeGatewayError = (error) => {
 export class PaystackService {
     constructor(secretKey) {
         this.baseUrl = 'https://api.paystack.co';
+        this.bankCache = null;
+        this.bankCacheExpiresAt = 0;
         this.secretKey = secretKey;
+    }
+    async getBanks() {
+        if (this.bankCache && this.bankCacheExpiresAt > Date.now()) {
+            return this.bankCache;
+        }
+        try {
+            const response = await axios.get(`${this.baseUrl}/bank`, {
+                params: { country: 'nigeria', currency: 'NGN', perPage: 100 },
+                headers: { Authorization: `Bearer ${this.secretKey}` },
+            });
+            const banks = Array.isArray(response.data?.data)
+                ? response.data.data
+                    .filter((bank) => bank?.name && bank?.code)
+                    .map((bank) => ({ name: String(bank.name), code: String(bank.code) }))
+                : [];
+            if (!banks.length) {
+                throw new Error('Paystack returned no Nigerian banks');
+            }
+            this.bankCache = banks;
+            this.bankCacheExpiresAt = Date.now() + 60 * 60 * 1000;
+            return banks;
+        }
+        catch (error) {
+            console.error('[paystack] bank list failed:', describeGatewayError(error));
+            throw error;
+        }
+    }
+    async resolveBankCode(bankName) {
+        const normalizedName = bankName.trim().toLowerCase();
+        const banks = await this.getBanks();
+        const bank = banks.find((item) => item.name.trim().toLowerCase() === normalizedName);
+        return bank?.code;
     }
     async initializeTransaction(email, amount, metadata, callbackUrl) {
         try {
