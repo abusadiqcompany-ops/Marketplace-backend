@@ -55,9 +55,12 @@ export class PaystackService {
   }
 
   async resolveBankCode(bankName: string): Promise<string | undefined> {
-    const normalizedName = bankName.trim().toLowerCase();
+    const normalizedName = bankName.trim().toLowerCase().replace(/[^a-z0-9]/g, '');
     const banks = await this.getBanks();
-    const bank = banks.find((item) => item.name.trim().toLowerCase() === normalizedName);
+    const bank = banks.find((item) => {
+      const candidate = item.name.trim().toLowerCase().replace(/[^a-z0-9]/g, '');
+      return candidate === normalizedName || candidate.includes(normalizedName) || normalizedName.includes(candidate);
+    });
     return bank?.code;
   }
 

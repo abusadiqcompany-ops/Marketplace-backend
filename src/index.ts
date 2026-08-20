@@ -117,25 +117,6 @@ const flutterwaveService = new FlutterwaveService(
   process.env.FLUTTERWAVE_PUBLIC_KEY || ''
 );
 
-const PAYSTACK_BANK_CODES: Record<string, string> = {
-  'GTBank': '058',
-  'Zenith Bank': '057',
-  'Access Bank': '044',
-  'UBA': '033',
-  'Kuda': '090267',
-  'OPay': '100004',
-  'First Bank': '011',
-  'Fidelity Bank': '070',
-  'EcoBank': '050',
-  'Union Bank': '032',
-  'Stanbic IBTC': '221',
-  'Sterling Bank': '232',
-  'Polaris Bank': '076',
-  'Keystone Bank': '082',
-  'Wema Bank': '035',
-  'FCMB': '214',
-};
-
 const broadcastChatMessage = (message: ChatMessageRecord) => {
   const subscribers = chatSubscribers.get(message.chatId);
   if (!subscribers?.size) return;
@@ -972,11 +953,13 @@ app.post(
     if (/^\d+$/.test(String(bankName))) {
       bankCode = String(bankName);
     } else {
-      bankCode = await paystackService.resolveBankCode(String(bankName)) || PAYSTACK_BANK_CODES[bankName] || '';
+      bankCode = await paystackService.resolveBankCode(String(bankName)) || '';
     }
     if (!bankCode) {
       return res.status(400).json({ error: 'Unsupported bank. Please select a supported Nigerian bank.' });
     }
+
+    console.info('[wallet withdrawal] resolved bank', { bankName: String(bankName), bankCode });
 
     if (!process.env.PAYSTACK_SECRET_KEY?.trim()) {
       return res.status(503).json({ error: 'Bank withdrawals are not configured. Set PAYSTACK_SECRET_KEY first.' });
