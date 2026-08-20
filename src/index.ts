@@ -1585,15 +1585,20 @@ app.get('/health', (_req: Request, res: Response) => {
 // ============== ERROR HANDLER ==============
 
 app.use((err: any, req: Request, res: Response, next: NextFunction) => {
+  const gatewayError = err?.response?.data;
+  const errorMessage = gatewayError?.message || err?.message || 'Internal server error';
+  const statusCode = err?.response?.status || err?.status || 500;
+
   console.error('[api error]', {
     method: req.method,
     path: req.path,
-    status: err?.status || 500,
-    message: err?.message || 'Internal server error',
-    response: err?.response?.data,
+    status: statusCode,
+    message: errorMessage,
+    code: gatewayError?.code,
   });
-  res.status(err.status || 500).json({
-    error: err.message || 'Internal server error',
+  res.status(statusCode).json({
+    error: errorMessage,
+    code: gatewayError?.code,
   });
 });
 
