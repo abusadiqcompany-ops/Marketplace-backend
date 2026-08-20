@@ -696,6 +696,8 @@ app.post('/api/wallet/deposit/initialize', verifyAuthToken, asyncHandler(async (
     if (provider === 'paystack') {
         const paymentData = await paystackService.initializeTransaction(email, amount, {
             userId: req.userId,
+            amount,
+            email,
             type: 'wallet_deposit',
             provider,
         }, resolvedCallbackUrl);
@@ -704,6 +706,8 @@ app.post('/api/wallet/deposit/initialize', verifyAuthToken, asyncHandler(async (
     const txRef = `WALLET_${Date.now()}_${uuidv4().substring(0, 8)}`;
     const paymentData = await flutterwaveService.initializePayment(email, amount, txRef, {
         userId: req.userId,
+        amount,
+        email,
         type: 'wallet_deposit',
         provider,
     }, 'NGN', resolvedCallbackUrl);
