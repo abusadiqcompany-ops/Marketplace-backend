@@ -1,6 +1,18 @@
 import axios from 'axios';
 import { getFrontendUrl } from '../utils/frontend.js';
 
+const describeGatewayError = (error: unknown) => {
+  if (axios.isAxiosError(error)) {
+    return {
+      message: error.message,
+      status: error.response?.status,
+      response: error.response?.data,
+    };
+  }
+
+  return { message: error instanceof Error ? error.message : String(error) };
+};
+
 // Paystack Payment Service
 export class PaystackService {
   private baseUrl = 'https://api.paystack.co';
@@ -43,7 +55,7 @@ export class PaystackService {
 
       throw new Error('Failed to initialize Paystack transaction');
     } catch (error) {
-      console.error('Paystack initialize error:', error);
+      console.error('[paystack] initialize failed:', describeGatewayError(error));
       throw error;
     }
   }
@@ -69,7 +81,7 @@ export class PaystackService {
         data: response.data.data,
       };
     } catch (error) {
-      console.error('Paystack verify error:', error);
+      console.error('[paystack] verify failed:', describeGatewayError(error));
       throw error;
     }
   }
@@ -103,7 +115,7 @@ export class PaystackService {
 
       throw new Error('Failed to create transfer recipient');
     } catch (error) {
-      console.error('Paystack transfer recipient error:', error);
+      console.error('[paystack] transfer recipient failed:', describeGatewayError(error));
       throw error;
     }
   }
@@ -139,7 +151,7 @@ export class PaystackService {
 
       throw new Error('Failed to initiate transfer');
     } catch (error) {
-      console.error('Paystack transfer error:', error);
+      console.error('[paystack] transfer failed:', describeGatewayError(error));
       throw error;
     }
   }
@@ -199,7 +211,7 @@ export class FlutterwaveService {
 
       throw new Error('Failed to initialize Flutterwave payment');
     } catch (error) {
-      console.error('Flutterwave initialize error:', error);
+      console.error('[flutterwave] initialize failed:', describeGatewayError(error));
       throw error;
     }
   }
@@ -233,7 +245,7 @@ export class FlutterwaveService {
         message: response.data.message,
       };
     } catch (error) {
-      console.error('Flutterwave verify error:', error);
+      console.error('[flutterwave] verify failed:', describeGatewayError(error));
       throw error;
     }
   }
@@ -273,7 +285,7 @@ export class FlutterwaveService {
 
       throw new Error('Failed to create Flutterwave transfer');
     } catch (error) {
-      console.error('Flutterwave transfer error:', error);
+      console.error('[flutterwave] transfer failed:', describeGatewayError(error));
       throw error;
     }
   }

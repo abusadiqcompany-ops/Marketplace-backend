@@ -1580,7 +1580,13 @@ app.get('/health', (_req: Request, res: Response) => {
 // ============== ERROR HANDLER ==============
 
 app.use((err: any, req: Request, res: Response, next: NextFunction) => {
-  console.error(err);
+  console.error('[api error]', {
+    method: req.method,
+    path: req.path,
+    status: err?.status || 500,
+    message: err?.message || 'Internal server error',
+    response: err?.response?.data,
+  });
   res.status(err.status || 500).json({
     error: err.message || 'Internal server error',
   });

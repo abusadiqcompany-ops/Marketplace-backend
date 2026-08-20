@@ -1162,7 +1162,13 @@ app.get('/health', (_req, res) => {
 });
 // ============== ERROR HANDLER ==============
 app.use((err, req, res, next) => {
-    console.error(err);
+    console.error('[api error]', {
+        method: req.method,
+        path: req.path,
+        status: err?.status || 500,
+        message: err?.message || 'Internal server error',
+        response: err?.response?.data,
+    });
     res.status(err.status || 500).json({
         error: err.message || 'Internal server error',
     });
