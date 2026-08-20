@@ -696,8 +696,6 @@ app.post('/api/wallet/deposit/initialize', verifyAuthToken, asyncHandler(async (
     if (provider === 'paystack') {
         const paymentData = await paystackService.initializeTransaction(email, amount, {
             userId: req.userId,
-            amount,
-            email,
             type: 'wallet_deposit',
             provider,
         }, resolvedCallbackUrl);
@@ -706,8 +704,6 @@ app.post('/api/wallet/deposit/initialize', verifyAuthToken, asyncHandler(async (
     const txRef = `WALLET_${Date.now()}_${uuidv4().substring(0, 8)}`;
     const paymentData = await flutterwaveService.initializePayment(email, amount, txRef, {
         userId: req.userId,
-        amount,
-        email,
         type: 'wallet_deposit',
         provider,
     }, 'NGN', resolvedCallbackUrl);
@@ -801,8 +797,17 @@ app.post('/api/payments/paystack/webhook', express.raw({ type: '*/*', limit: '1m
                 const verification = await paystackService.verifyTransaction(reference);
                 console.info('[paystack webhook] verification:', { reference, status: verification.status });
                 if (verification.status) {
-                    const { email, amount, orderId, userId } = verification.data?.metadata || {};
+                    const verifiedData = verification.data || {};
+                    const metadata = verifiedData.metadata || {};
+                    const email = metadata.email;
+                    const amount = Number(verifiedData.amount ?? metadata.amount ?? data.amount);
+                    const orderId = metadata.orderId;
+                    const userId = metadata.userId;
                     console.info('[paystack webhook] metadata:', { email, amount, orderId, userId });
+                    if (!userId || !Number.isFinite(amount) || amount <= 0) {
+                        console.error('[paystack webhook] missing valid deposit data', { amount, userId, reference });
+                        return res.status(400).send('Invalid payment data');
+                    }
                     if (orderId && userId) {
                         await orderService.lockPayment(orderId, userId, amount / 100, 'paystack', reference);
                     }
@@ -945,14 +950,18 @@ app.post('/api/deposit/verify', verifyAuthToken, asyncHandler(async (req, res) =
         if (!verification.status) {
             return res.status(400).json({ verified: false, error: verification.message });
         }
-        const { amount, metadata } = verification.data || {};
+        const verifiedData = verification.data || {};
+        const { metadata } = verifiedData;
         const { userId, type } = metadata || {};
         console.info('[deposit/verify] paystack metadata:', { metadata });
         if (!userId || userId !== req.userId || type !== 'wallet_deposit') {
             console.info('[deposit/verify] paystack metadata mismatch', { userId, expected: req.userId, type });
             return res.status(403).json({ error: 'Unauthorized or invalid deposit metadata' });
         }
-        const depositAmount = Number(amount) / 100;
+        const depositAmount = Number(verifiedData.amount ?? metadata?.amount) / 100;
+        if (!Number.isFinite(depositAmount) || depositAmount <= 0) {
+            return res.status(400).json({ verified: false, error: 'Invalid verified deposit amount' });
+        }
         const transaction = await walletService.addDeposit(userId, depositAmount, 'paystack', reference);
         const balance = await walletService.getBalance(userId);
         console.info('[deposit/verify] paystack deposit recorded', { userId, depositAmount, balance });

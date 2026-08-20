@@ -1047,8 +1047,17 @@ app.post(
           const verification = await paystackService.verifyTransaction(reference);
           console.info('[paystack webhook] verification:', { reference, status: verification.status });
           if (verification.status) {
-            const { email, amount, orderId, userId } = verification.data?.metadata || {};
+            const verifiedData = verification.data || {};
+            const metadata = verifiedData.metadata || {};
+            const email = metadata.email;
+            const amount = Number(verifiedData.amount ?? metadata.amount ?? data.amount);
+            const orderId = metadata.orderId;
+            const userId = metadata.userId;
             console.info('[paystack webhook] metadata:', { email, amount, orderId, userId });
+            if (!userId || !Number.isFinite(amount) || amount <= 0) {
+              console.error('[paystack webhook] missing valid deposit data', { amount, userId, reference });
+              return res.status(400).send('Invalid payment data');
+            }
             if (orderId && userId) {
               await orderService.lockPayment(orderId, userId, amount / 100, 'paystack', reference);
             } else if (userId) {
@@ -1238,7 +1247,8 @@ app.post(
         return res.status(400).json({ verified: false, error: verification.message });
       }
 
-      const { amount, metadata } = verification.data || {};
+      const verifiedData = verification.data || {};
+      const { metadata } = verifiedData;
       const { userId, type } = metadata || {};
       console.info('[deposit/verify] paystack metadata:', { metadata });
       if (!userId || userId !== req.userId || type !== 'wallet_deposit') {
@@ -1246,7 +1256,10 @@ app.post(
         return res.status(403).json({ error: 'Unauthorized or invalid deposit metadata' });
       }
 
-      const depositAmount = Number(amount) / 100;
+      const depositAmount = Number(verifiedData.amount ?? metadata?.amount) / 100;
+      if (!Number.isFinite(depositAmount) || depositAmount <= 0) {
+        return res.status(400).json({ verified: false, error: 'Invalid verified deposit amount' });
+      }
       const transaction = await walletService.addDeposit(userId, depositAmount, 'paystack', reference);
       const balance = await walletService.getBalance(userId);
       console.info('[deposit/verify] paystack deposit recorded', { userId, depositAmount, balance });
