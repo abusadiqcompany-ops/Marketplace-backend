@@ -1484,6 +1484,21 @@ app.post(
 );
 
 app.post(
+  '/api/orders/:id/fulfillment',
+  verifyAuthToken,
+  asyncHandler(async (req: AuthRequest, res: Response) => {
+    const { userId, method } = req.body;
+    if (userId !== req.userId) return res.status(403).json({ error: 'Unauthorized' });
+    if (method !== 'meetup' && method !== 'shipping') {
+      return res.status(400).json({ error: 'Fulfillment method must be meetup or shipping' });
+    }
+
+    const order = await orderService.selectFulfillment(req.params.id, userId, method);
+    res.json(order);
+  })
+);
+
+app.post(
   '/api/orders/:id/accept',
   verifyAuthToken,
   asyncHandler(async (req: AuthRequest, res: Response) => {

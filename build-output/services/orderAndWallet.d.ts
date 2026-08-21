@@ -39,6 +39,7 @@ export declare class OrderService {
         order: Order;
         transaction: Transaction;
     }>;
+    selectFulfillment(orderId: string, userId: string, method: 'meetup' | 'shipping'): Promise<Order>;
     /**
      * Accept order (seller accepts)
      */

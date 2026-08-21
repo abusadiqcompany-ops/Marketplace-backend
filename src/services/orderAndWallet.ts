@@ -314,6 +314,21 @@ export class OrderService {
     return { order: updatedOrder, transaction };
   }
 
+  async selectFulfillment(orderId: string, userId: string, method: 'meetup' | 'shipping'): Promise<Order> {
+    const order = await db.getOrder(orderId);
+    if (!order) throw new Error('Order not found');
+    if (order.buyerId !== userId) throw new Error('Only buyer can select fulfillment');
+    if (order.paymentStatus !== 'completed') throw new Error('Payment must be completed first');
+    if (!['meetup', 'shipping'].includes(method)) throw new Error('Unsupported fulfillment method');
+
+    return (await db.updateOrder(orderId, {
+      deliveryDetails: {
+        ...order.deliveryDetails,
+        method,
+      },
+    })) as Order;
+  }
+
   /**
    * Accept order (seller accepts)
    */
