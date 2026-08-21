@@ -645,6 +645,18 @@ app.get('/api/profile/stats', verifyAuthToken, asyncHandler(async (req, res) => 
     const sales = (await db.getAllOrders()).filter((o) => o.sellerId === sellerId).length;
     res.json({ activeListings, avgRating: listings.length ? avgRating : 0, totalReviews, sales });
 }));
+app.get('/api/sellers/:id/stats', asyncHandler(async (req, res) => {
+    const listings = await db.getListingsBySeller(req.params.id);
+    const successfulSales = (await db.getAllOrders()).filter((order) => order.sellerId === req.params.id && ['confirmed', 'completed'].includes(order.status)).length;
+    const totalReviews = listings.reduce((sum, listing) => sum + Number(listing.reviewCount || 0), 0);
+    const ratingPoints = listings.reduce((sum, listing) => sum + (Number(listing.rating || 0) * Number(listing.reviewCount || 0)), 0);
+    res.json({
+        activeListings: listings.length,
+        averageRating: totalReviews ? ratingPoints / totalReviews : 0,
+        totalReviews,
+        salesDone: successfulSales,
+    });
+}));
 app.post('/api/profile/avatar', verifyAuthToken, async (req, res) => {
     try {
         const { image } = req.body; // expect data URL from client
