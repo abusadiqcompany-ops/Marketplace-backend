@@ -592,11 +592,11 @@ export class Database {
         return rows[0] ? this.toListing(rows[0]) : undefined;
     }
     async getListingsBySeller(sellerId) {
-        const rows = await this.select('SELECT * FROM listings WHERE sellerId = ? ORDER BY createdAt DESC', [sellerId]);
+        const rows = await this.select('SELECT * FROM listings WHERE sellerId = ?', [sellerId]);
         return rows.map((row) => this.toListing(row));
     }
     async getAllListings() {
-        const rows = await this.select('SELECT * FROM listings ORDER BY createdAt DESC');
+        const rows = await this.select('SELECT * FROM listings');
         return rows.map((row) => this.toListing(row));
     }
     async updateListing(id, updates) {
