@@ -13,17 +13,33 @@ test('deleteListing returns false when no listing is removed', async () => {
     const deleted = await Database.prototype.deleteListing.call(db, 'missing-listing');
     assert.equal(deleted, false);
 });
-test('deleteUser anonymizes the account email instead of deleting the record', async () => {
+test('deleteUser permanently removes the account and its related records', async () => {
     const db = Object.create(Database.prototype);
-    let capturedParams;
+    const statements = [];
     db.getUser = async () => ({ id: 'user-1', email: 'old@example.com' });
-    db.execute = async (_sql, params) => {
-        capturedParams = params;
-        return { affectedRows: 1 };
+    db.init = async () => undefined;
+    db.pool = {
+        getConnection: async () => ({
+            beginTransaction: async () => undefined,
+            execute: async (sql) => {
+                statements.push(sql);
+                return [sql.startsWith('DELETE FROM users') ? { affectedRows: 1 } : {}];
+            },
+            commit: async () => undefined,
+            rollback: async () => undefined,
+            release: () => undefined,
+        }),
     };
     const deleted = await Database.prototype.deleteUser.call(db, 'user-1');
     assert.equal(deleted, true);
-    assert.ok(capturedParams);
-    assert.equal(capturedParams?.[1], 'deleted.user-1@deleted.local');
+    assert.deepEqual(statements, [
+        'DELETE FROM listings WHERE sellerId = ?',
+        'DELETE FROM orders WHERE buyerId = ? OR sellerId = ?',
+        'DELETE FROM transactions WHERE userId = ? OR counterpartyId = ?',
+        'DELETE FROM wallets WHERE userId = ?',
+        'DELETE FROM reports WHERE reporterId = ? OR reportedUserId = ?',
+        'DELETE FROM account_deletion_requests WHERE userId = ?',
+        'DELETE FROM users WHERE id = ?',
+    ]);
 });
 //# sourceMappingURL=database.test.js.map

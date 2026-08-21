@@ -1,6 +1,6 @@
 import { v4 as uuidv4 } from 'uuid';
 import dotenv from 'dotenv';
-import mysql, { Pool, RowDataPacket } from 'mysql2/promise';
+import mysql, { Pool, PoolConnection, RowDataPacket } from 'mysql2/promise';
 
 dotenv.config();
 
@@ -881,39 +881,33 @@ export class Database {
     const user = await this.getUser(id);
     if (!user) return false;
 
-    const deletedEmail = `deleted.${id}@deleted.local`;
-    const result = await this.execute(
-      `UPDATE users SET
-        name = ?,
-        email = ?,
-        password = NULL,
-        avatar = NULL,
-        accountNumber = NULL,
-        phone = NULL,
-        businessName = NULL,
-        description = NULL,
-        sellerLocation = NULL,
-        paymentMethods = NULL,
-        verified = FALSE,
-        verificationLevel = 'unverified',
-        verificationBadgeType = NULL,
-        verificationRequestStatus = 'pending',
-        verificationFee = 0,
-        emailVerified = FALSE,
-        phoneVerified = FALSE,
-        emailOtp = NULL,
-        phoneOtp = NULL,
-        otpExpiresAt = NULL,
-        updatedAt = CURRENT_TIMESTAMP
-      WHERE id = ?`,
-      [
-        `Deleted User ${id.slice(0, 8)}`,
-        deletedEmail,
-        id,
-      ]
-    );
+    await this.init();
+    const connection: PoolConnection = await this.pool.getConnection();
 
-    return (result as any).affectedRows > 0;
+    try {
+      await connection.beginTransaction();
+      await connection.execute('DELETE FROM listings WHERE sellerId = ?', [id]);
+      await connection.execute('DELETE FROM orders WHERE buyerId = ? OR sellerId = ?', [id, id]);
+      await connection.execute('DELETE FROM transactions WHERE userId = ? OR counterpartyId = ?', [id, id]);
+      await connection.execute('DELETE FROM wallets WHERE userId = ?', [id]);
+      await connection.execute('DELETE FROM reports WHERE reporterId = ? OR reportedUserId = ?', [id, id]);
+      await connection.execute('DELETE FROM account_deletion_requests WHERE userId = ?', [id]);
+      const [result] = await connection.execute('DELETE FROM users WHERE id = ?', [id]);
+      const deleted = Number((result as any)?.affectedRows || 0) > 0;
+
+      if (!deleted) {
+        await connection.rollback();
+        return false;
+      }
+
+      await connection.commit();
+      return true;
+    } catch (error) {
+      await connection.rollback();
+      throw error;
+    } finally {
+      connection.release();
+    }
   }
 
   async deleteListing(id: string): Promise<boolean> {

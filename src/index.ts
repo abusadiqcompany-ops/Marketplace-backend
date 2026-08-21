@@ -1569,8 +1569,12 @@ app.get('/health', (_req: Request, res: Response) => {
 
 app.use((err: any, req: Request, res: Response, next: NextFunction) => {
   const gatewayError = err?.response?.data;
-  const errorMessage = gatewayError?.message || err?.message || 'Internal server error';
-  const statusCode = err?.response?.status || err?.status || 500;
+  const rawMessage = gatewayError?.message || err?.message || 'Internal server error';
+  const payoutUnavailable = /third.?party payouts|starter business|payouts?.*not allowed|transfer.*not allowed/i.test(String(rawMessage));
+  const errorMessage = payoutUnavailable
+    ? 'Bank withdrawals are unavailable because this Paystack account cannot initiate third-party payouts yet. Enable Paystack Transfers/Payouts or upgrade the business account.'
+    : rawMessage;
+  const statusCode = payoutUnavailable ? 503 : err?.response?.status || err?.status || 500;
 
   console.error('[api error]', {
     method: req.method,
