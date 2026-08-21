@@ -219,11 +219,47 @@ app.post('/api/auth/change-password', verifyAuthToken, asyncHandler(async (req, 
 // ============== ADMIN ROUTES ==============
 app.get('/api/admin/users', verifyAuthToken, requireRole('admin'), asyncHandler(async (req, res) => {
     const users = await db.getAllUsers();
+    const orders = await db.getAllOrders();
+    const twoWeeksAgo = Date.now() - 14 * 24 * 60 * 60 * 1000;
+    // The assistant uses durable activity signals so recommendations survive refreshes.
+    for (const user of users) {
+        if (user.verified || user.verificationBadgeType || user.verificationFee)
+            continue;
+        const completedSales = orders.filter((order) => order.sellerId === user.id && ['confirmed', 'completed'].includes(order.status)).length;
+        const activeForTwoWeeks = new Date(user.createdAt).getTime() <= twoWeeksAgo;
+        const badgeType = user.role === 'seller' && completedSales >= 10
+            ? 'verified_seller'
+            : activeForTwoWeeks
+                ? 'active_member'
+                : undefined;
+        if (badgeType) {
+            await db.updateUser(user.id, {
+                verificationBadgeType: badgeType,
+                verificationRequestStatus: 'pending',
+                verificationFee: Number(process.env.VERIFICATION_FEE || 5000),
+            });
+            Object.assign(user, {
+                verificationBadgeType: badgeType,
+                verificationRequestStatus: 'pending',
+                verificationFee: Number(process.env.VERIFICATION_FEE || 5000),
+            });
+        }
+    }
     const safeUsers = users.map((user) => {
         const { password: _password, ...userWithoutPassword } = user;
         return userWithoutPassword;
     });
     res.json(safeUsers);
+}));
+app.get('/api/admin/revenue', verifyAuthToken, requireRole('admin'), asyncHandler(async (req, res) => {
+    const transactions = await db.getAllTransactions();
+    const deposits = transactions.filter((transaction) => transaction.type === 'deposit' && transaction.status === 'completed');
+    const withdrawals = transactions.filter((transaction) => transaction.type === 'withdrawal' && ['completed', 'processing'].includes(transaction.status));
+    res.json({
+        deposits: deposits.reduce((sum, transaction) => sum + transaction.amount, 0),
+        withdrawals: withdrawals.reduce((sum, transaction) => sum + transaction.amount, 0),
+        transactionCount: deposits.length + withdrawals.length,
+    });
 }));
 app.get('/api/admin/listings', verifyAuthToken, requireRole('admin'), asyncHandler(async (req, res) => {
     const listings = await db.getAllListings();
@@ -324,7 +360,10 @@ app.post('/api/users/:id/verify-membership', verifyAuthToken, asyncHandler(async
     }, 'NGN', `${callbackBase}?type=membership_verification&userId=${user.id}&provider=flutterwave`);
     res.json({ ...paymentData, provider: selectedProvider, userId: user.id, amount: verificationAmount, reference });
 }));
-app.post('/api/admin/users/:id/verify-membership/verify', verifyAuthToken, requireRole('admin'), asyncHandler(async (req, res) => {
+app.post('/api/users/:id/verify-membership/verify', verifyAuthToken, asyncHandler(async (req, res) => {
+    if (req.user?.role !== 'admin' && req.userId !== req.params.id) {
+        return res.status(403).json({ error: 'You can only verify your own membership payment' });
+    }
     const { provider, reference } = req.body;
     const user = await db.getUser(req.params.id);
     if (!user) {
@@ -389,6 +428,22 @@ app.post('/api/admin/users/:id/approve-verification', verifyAuthToken, requireRo
         return res.status(500).json({ error: 'Unable to save verification approval' });
     }
     return res.json({ verified: true, user: updatedUser });
+}));
+app.post('/api/admin/users/:id/request-verification', verifyAuthToken, requireRole('admin'), asyncHandler(async (req, res) => {
+    const user = await db.getUser(req.params.id);
+    if (!user)
+        return res.status(404).json({ error: 'User not found' });
+    const badgeType = req.body?.badgeType === 'verified_seller' ? 'verified_seller' : 'active_member';
+    const verificationFee = Number(req.body?.verificationFee || process.env.VERIFICATION_FEE || 5000);
+    if (!Number.isFinite(verificationFee) || verificationFee <= 0) {
+        return res.status(400).json({ error: 'Verification fee must be greater than zero' });
+    }
+    const updatedUser = await db.updateUser(user.id, {
+        verificationBadgeType: badgeType,
+        verificationRequestStatus: 'pending',
+        verificationFee,
+    });
+    res.json({ requested: true, user: updatedUser });
 }));
 app.delete('/api/admin/users/:id', verifyAuthToken, requireRole('admin'), asyncHandler(async (req, res) => {
     const deleted = await db.deleteUser(req.params.id);
