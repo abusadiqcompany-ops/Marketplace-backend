@@ -110,28 +110,37 @@ async function deliverVerificationCode(type: 'email' | 'phone', destination: str
     const apiKey = process.env.RESEND_API_KEY;
     const fromAddress = process.env.EMAIL_FROM || 'no-reply@marketconnect.dev';
 
-    if (apiKey) {
-      const response = await fetch('https://api.resend.com/emails', {
-        method: 'POST',
-        headers: {
-          'Authorization': `Bearer ${apiKey}`,
-          'Content-Type': 'application/json',
-        },
-        body: JSON.stringify({
-          from: fromAddress,
-          to: [destination],
-          subject: 'Your MarketConnect verification code',
-          text: `Your verification code is ${code}`,
-          html: `<p>Your MarketConnect verification code is <strong>${code}</strong>.</p>`,
-        }),
-      });
-
-      if (!response.ok) {
-        throw new Error(`Email delivery failed with status ${response.status}`);
-      }
-
-      return;
+    if (!apiKey || apiKey === 'your_resend_api_key') {
+      throw new Error('Email delivery is not configured. Set a valid RESEND_API_KEY in the backend environment.');
     }
+
+    const response = await fetch('https://api.resend.com/emails', {
+      method: 'POST',
+      headers: {
+        'Authorization': `Bearer ${apiKey}`,
+        'Content-Type': 'application/json',
+      },
+      body: JSON.stringify({
+        from: fromAddress,
+        to: [destination],
+        subject: 'Your MarketConnect verification code',
+        text: `Your verification code is ${code}`,
+        html: `<p>Your MarketConnect verification code is <strong>${code}</strong>.</p>`,
+      }),
+    });
+
+    if (!response.ok) {
+      let providerMessage = '';
+      try {
+        const body = await response.json() as { message?: string; name?: string };
+        providerMessage = body.message || body.name || '';
+      } catch {
+        // Keep the status as the fallback when the provider does not return JSON.
+      }
+      throw new Error(`Email delivery failed with status ${response.status}${providerMessage ? `: ${providerMessage}` : ''}`);
+    }
+
+    return;
   } else {
     const accountSid = process.env.TWILIO_ACCOUNT_SID;
     const authToken = process.env.TWILIO_AUTH_TOKEN;
@@ -158,7 +167,7 @@ async function deliverVerificationCode(type: 'email' | 'phone', destination: str
     }
   }
 
-  console.info(`[verification] ${type === 'email' ? 'Email' : 'SMS'} code sent to ${destination}`);
+  console.info(`[verification] SMS code sent to ${destination}`);
   console.info(`[verification] code: ${code}`);
 }
 
