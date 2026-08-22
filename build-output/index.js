@@ -602,6 +602,25 @@ app.get('/api/listings/seller/:sellerId', asyncHandler(async (req, res) => {
     const listings = await db.getListingsBySeller(req.params.sellerId);
     res.json(listings);
 }));
+app.put('/api/listings/:id', verifyAuthToken, asyncHandler(async (req, res) => {
+    const listing = await db.getListing(req.params.id);
+    if (!listing) {
+        return res.status(404).json({ error: 'Listing not found' });
+    }
+    if (listing.sellerId !== req.userId && req.user?.role !== 'admin') {
+        return res.status(403).json({ error: 'Unauthorized' });
+    }
+    const allowedUpdates = {};
+    for (const field of ['sellerName', 'title', 'description', 'price', 'category', 'location', 'images']) {
+        if (req.body[field] !== undefined)
+            allowedUpdates[field] = req.body[field];
+    }
+    const updated = await db.updateListing(req.params.id, allowedUpdates);
+    if (!updated) {
+        return res.status(500).json({ error: 'Unable to update listing' });
+    }
+    res.json(updated);
+}));
 app.delete('/api/listings/:id', verifyAuthToken, asyncHandler(async (req, res) => {
     const listing = await db.getListing(req.params.id);
     if (!listing) {
