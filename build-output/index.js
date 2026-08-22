@@ -155,16 +155,28 @@ app.post('/api/auth/send-verification', verifyAuthToken, asyncHandler(async (req
     if (type !== 'email' && type !== 'phone') {
         return res.status(400).json({ error: 'Verification type must be email or phone' });
     }
-    const result = await authService.sendVerification(req.userId, type);
-    res.json(result);
+    try {
+        const result = await authService.sendVerification(req.userId, type);
+        res.json(result);
+    }
+    catch (error) {
+        const message = error?.message || 'Unable to send verification code.';
+        res.status(400).json({ error: message });
+    }
 }));
 app.post('/api/auth/verify-code', verifyAuthToken, asyncHandler(async (req, res) => {
     const { type, code } = req.body;
     if (type !== 'email' && type !== 'phone') {
         return res.status(400).json({ error: 'Verification type must be email or phone' });
     }
-    const user = await authService.verifyCode(req.userId, type, code);
-    res.json({ user, message: `${type === 'email' ? 'Email' : 'Phone'} verified successfully.` });
+    try {
+        const user = await authService.verifyCode(req.userId, type, code);
+        res.json({ user, message: `${type === 'email' ? 'Email' : 'Phone'} verified successfully.` });
+    }
+    catch (error) {
+        const message = error?.message || 'Verification failed.';
+        res.status(400).json({ error: message });
+    }
 }));
 app.get('/api/auth/me', verifyAuthToken, asyncHandler(async (req, res) => {
     const user = await authService.getCurrentUser(req.userId);

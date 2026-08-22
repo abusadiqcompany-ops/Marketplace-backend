@@ -186,8 +186,13 @@ app.post(
       return res.status(400).json({ error: 'Verification type must be email or phone' });
     }
 
-    const result = await authService.sendVerification(req.userId!, type);
-    res.json(result);
+    try {
+      const result = await authService.sendVerification(req.userId!, type);
+      res.json(result);
+    } catch (error: any) {
+      const message = error?.message || 'Unable to send verification code.';
+      res.status(400).json({ error: message });
+    }
   })
 );
 
@@ -200,8 +205,13 @@ app.post(
       return res.status(400).json({ error: 'Verification type must be email or phone' });
     }
 
-    const user = await authService.verifyCode(req.userId!, type, code);
-    res.json({ user, message: `${type === 'email' ? 'Email' : 'Phone'} verified successfully.` });
+    try {
+      const user = await authService.verifyCode(req.userId!, type, code);
+      res.json({ user, message: `${type === 'email' ? 'Email' : 'Phone'} verified successfully.` });
+    } catch (error: any) {
+      const message = error?.message || 'Verification failed.';
+      res.status(400).json({ error: message });
+    }
   })
 );
 
