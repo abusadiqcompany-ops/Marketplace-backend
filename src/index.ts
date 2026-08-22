@@ -17,7 +17,7 @@ import { AuthService } from './services/auth.js';
 import { PaystackService, FlutterwaveService } from './services/paymentGateways.js';
 import { verifyAuthToken, requireRole, optionalAuth, AuthRequest } from './middleware/auth.js';
 import { verifyRefreshToken, generateTokenPair, extractTokenFromHeader } from './utils/auth.js';
-import { getFrontendUrl } from './utils/frontend.js';
+import { getAllowedOrigins, getFrontendUrl } from './utils/frontend.js';
 import { createChatMessage, deriveChatId, type ChatMessageRecord } from './utils/chat.js';
 
 dotenv.config();
@@ -28,23 +28,7 @@ const HOST = process.env.HOST || '0.0.0.0';
 
 // Middleware
 const frontendOrigin = getFrontendUrl();
-const allowedOrigins = new Set([
-  frontendOrigin,
-  process.env.FRONTEND_URL,
-  'https://marketplace-frontend-git-main-musaf-technologies.vercel.app',
-  'https://marketplace-frontend-mu-two.vercel.app',
-  'http://localhost:5173',
-  'http://127.0.0.1:5173',
-  'http://localhost:4173',
-  'http://localhost:3000',
-  'http://127.0.0.1:3000',
-  'http://127.0.0.1:4173',
-  'http://localhost:4174',
-  'http://127.0.0.1:4174',
-  'https://localhost:4173',
-  'https://127.0.0.1:4173',
-  ...(process.env.ALLOWED_ORIGINS?.split(',').filter(Boolean) || []),
-]);
+const allowedOrigins = new Set(getAllowedOrigins());
 const normalizeOrigin = (origin: string | undefined) => origin?.replace(/\/$/, '');
 const isAllowedOrigin = (origin: string | undefined) => {
   if (!origin) return false;
