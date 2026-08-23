@@ -7,6 +7,7 @@ export interface ChatMessagePayload {
   senderName: string;
   content: string;
   image?: string;
+  audio?: string;
   timestamp?: string;
 }
 
@@ -28,6 +29,7 @@ export function createChatMessage(payload: ChatMessagePayload): ChatMessageRecor
     senderName: payload.senderName,
     content: payload.content,
     image: payload.image,
+    audio: payload.audio,
     timestamp: payload.timestamp || new Date().toISOString(),
   };
 }
