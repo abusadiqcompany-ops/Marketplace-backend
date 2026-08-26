@@ -33,7 +33,7 @@ export interface User {
     verified: boolean;
     verificationLevel: 'unverified' | 'basic' | 'full';
     verificationBadgeType?: 'active_member' | 'verified_seller';
-    verificationRequestStatus?: 'pending' | 'paid' | 'approved';
+    verificationRequestStatus?: 'unrequested' | 'pending' | 'paid' | 'approved';
     verificationFee?: number;
     emailVerified?: boolean;
     phoneVerified?: boolean;

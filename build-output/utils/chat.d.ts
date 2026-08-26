@@ -5,6 +5,7 @@ export interface ChatMessagePayload {
     senderName: string;
     content: string;
     image?: string;
+    audio?: string;
     timestamp?: string;
 }
 export interface ChatMessageRecord extends ChatMessagePayload {

@@ -1,4 +1,4 @@
-import { Transaction, Wallet, Order } from '../database.js';
+import { Transaction, User, Wallet, Order } from '../database.js';
 export declare class WalletService {
     /**
      * Get or create wallet for user
@@ -25,6 +25,11 @@ export declare class WalletService {
      * Get transaction history
      */
     getTransactionHistory(userId: string): Promise<Transaction[]>;
+    payVerificationWithWallet(userId: string): Promise<{
+        user: User;
+        balance: number;
+        amount: number;
+    }>;
 }
 export declare class OrderService {
     /**

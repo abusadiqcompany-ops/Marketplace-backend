@@ -125,6 +125,66 @@ export class WalletService {
     async getTransactionHistory(userId) {
         return db.getTransactionsByUser(userId);
     }
+    async payVerificationWithWallet(userId) {
+        const user = await db.getUser(userId);
+        if (!user)
+            throw new Error('User not found');
+        if (user.verified || user.verificationRequestStatus === 'approved') {
+            throw new Error('User is already verified');
+        }
+        if (user.verificationRequestStatus !== 'pending') {
+            throw new Error('No verification payment request has been sent by admin');
+        }
+        const amount = Number(user.verificationFee || 0);
+        if (!Number.isFinite(amount) || amount <= 0) {
+            throw new Error('Invalid verification fee');
+        }
+        const admin = (await db.getAllUsers()).find((candidate) => candidate.role === 'admin');
+        if (!admin)
+            throw new Error('Admin account required to receive payment');
+        const userWallet = await this.getOrCreateWallet(userId);
+        if (userWallet.balance < amount)
+            throw new Error('Insufficient wallet balance');
+        const reference = `VERIFICATION_${userId}_${user.verificationFee}`;
+        const existingPayment = await db.getTransactionsByReference(reference);
+        if (existingPayment) {
+            const updatedUser = await db.getUser(userId);
+            if (!updatedUser)
+                throw new Error('User not found');
+            return { user: updatedUser, balance: await this.getBalance(userId), amount };
+        }
+        const paymentTransaction = {
+            id: uuidv4(),
+            type: 'withdrawal',
+            userId,
+            counterpartyId: admin.id,
+            amount,
+            status: 'completed',
+            currency: 'NGN',
+            paymentGateway: 'manual',
+            reference,
+            createdAt: new Date().toISOString(),
+            completedAt: new Date().toISOString(),
+            details: 'Verification fee paid to admin from wallet',
+            metadata: { type: 'membership_verification', adminId: admin.id },
+        };
+        await db.addTransaction(paymentTransaction);
+        await db.updateWallet(userId, {
+            balance: userWallet.balance - amount,
+            transactions: [...(userWallet.transactions || []), paymentTransaction],
+        });
+        await this.syncWalletBalanceToUser(userId);
+        await this.addDeposit(admin.id, amount, 'manual', `VERIFICATION_RECEIPT_${userId}_${user.verificationFee}`);
+        const approvedUser = await db.updateUser(userId, {
+            verified: true,
+            verificationLevel: user.verificationBadgeType === 'verified_seller' ? 'full' : 'basic',
+            verificationBadgeType: user.verificationBadgeType || 'active_member',
+            verificationRequestStatus: 'approved',
+        });
+        if (!approvedUser)
+            throw new Error('Unable to approve verification');
+        return { user: approvedUser, balance: userWallet.balance - amount, amount };
+    }
 }
 export class OrderService {
     /**

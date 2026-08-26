@@ -215,32 +215,6 @@ app.post('/api/auth/change-password', verifyAuthToken, asyncHandler(async (req, 
 // ============== ADMIN ROUTES ==============
 app.get('/api/admin/users', verifyAuthToken, requireRole('admin'), asyncHandler(async (req, res) => {
     const users = await db.getAllUsers();
-    const orders = await db.getAllOrders();
-    const twoWeeksAgo = Date.now() - 14 * 24 * 60 * 60 * 1000;
-    // The assistant uses durable activity signals so recommendations survive refreshes.
-    for (const user of users) {
-        if (user.verified || user.verificationBadgeType || user.verificationFee)
-            continue;
-        const completedSales = orders.filter((order) => order.sellerId === user.id && ['confirmed', 'completed'].includes(order.status)).length;
-        const activeForTwoWeeks = new Date(user.createdAt).getTime() <= twoWeeksAgo;
-        const badgeType = user.role === 'seller' && completedSales >= 10
-            ? 'verified_seller'
-            : activeForTwoWeeks
-                ? 'active_member'
-                : undefined;
-        if (badgeType) {
-            await db.updateUser(user.id, {
-                verificationBadgeType: badgeType,
-                verificationRequestStatus: 'pending',
-                verificationFee: Number(process.env.VERIFICATION_FEE || 5000),
-            });
-            Object.assign(user, {
-                verificationBadgeType: badgeType,
-                verificationRequestStatus: 'pending',
-                verificationFee: Number(process.env.VERIFICATION_FEE || 5000),
-            });
-        }
-    }
     const safeUsers = users.map((user) => {
         const { password: _password, ...userWithoutPassword } = user;
         return userWithoutPassword;
@@ -406,6 +380,13 @@ app.post('/api/users/:id/verify-membership/verify', verifyAuthToken, asyncHandle
     }
     res.status(400).json({ error: 'Unsupported provider' });
 }));
+app.post('/api/users/:id/verify-membership/pay-wallet', verifyAuthToken, asyncHandler(async (req, res) => {
+    if (req.user?.role !== 'admin' && req.userId !== req.params.id) {
+        return res.status(403).json({ error: 'You can only pay your own verification request' });
+    }
+    const result = await walletService.payVerificationWithWallet(req.params.id);
+    return res.json({ paid: true, verified: true, ...result });
+}));
 app.post('/api/admin/users/:id/approve-verification', verifyAuthToken, requireRole('admin'), asyncHandler(async (req, res) => {
     const { badgeType, verificationFee } = req.body;
     const user = await db.getUser(req.params.id);
@@ -538,6 +519,7 @@ app.post('/api/users', asyncHandler(async (req, res) => {
         location,
         verified: false,
         verificationLevel: 'unverified',
+        verificationRequestStatus: 'unrequested',
         createdAt: new Date().toISOString(),
         updatedAt: new Date().toISOString(),
     };
@@ -1227,12 +1209,12 @@ app.get('/api/chat/stream', (req, res) => {
     });
 });
 app.post('/api/chat/messages', asyncHandler(async (req, res) => {
-    const { senderId, senderName, content, image, recipientId, listingId } = req.body || {};
-    if (!senderId || !senderName || !recipientId || (!content && !image)) {
-        return res.status(400).json({ error: 'senderId, senderName, recipientId, and either content or image are required' });
+    const { senderId, senderName, content, image, audio, recipientId, listingId } = req.body || {};
+    if (!senderId || !senderName || !recipientId || (!content && !image && !audio)) {
+        return res.status(400).json({ error: 'senderId, senderName, recipientId, and either content, image, or audio are required' });
     }
     const chatId = deriveChatId(senderId, recipientId, listingId);
-    const message = createChatMessage({ chatId, senderId, senderName, content: content || '', image });
+    const message = createChatMessage({ chatId, senderId, senderName, content: content || '', image, audio });
     chatMessages.push(message);
     broadcastChatMessage(message);
     res.status(201).json(message);

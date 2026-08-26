@@ -11,6 +11,7 @@ export function createChatMessage(payload) {
         senderName: payload.senderName,
         content: payload.content,
         image: payload.image,
+        audio: payload.audio,
         timestamp: payload.timestamp || new Date().toISOString(),
     };
 }
