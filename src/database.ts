@@ -50,7 +50,7 @@ export interface User {
   verified: boolean;
   verificationLevel: 'unverified' | 'basic' | 'full';
   verificationBadgeType?: 'active_member' | 'verified_seller';
-  verificationRequestStatus?: 'pending' | 'paid' | 'approved';
+  verificationRequestStatus?: 'unrequested' | 'pending' | 'paid' | 'approved';
   verificationFee?: number;
   emailVerified?: boolean;
   phoneVerified?: boolean;
@@ -243,7 +243,7 @@ export class Database {
   private async ensureUserVerificationColumns(): Promise<void> {
     const requiredColumns = [
       { name: 'verificationBadgeType', definition: 'VARCHAR(30) NULL DEFAULT NULL' },
-      { name: 'verificationRequestStatus', definition: 'VARCHAR(20) NOT NULL DEFAULT "pending"' },
+      { name: 'verificationRequestStatus', definition: 'VARCHAR(20) NOT NULL DEFAULT "unrequested"' },
       { name: 'verificationFee', definition: 'DECIMAL(12,2) NOT NULL DEFAULT 0' },
       { name: 'emailVerified', definition: 'BOOLEAN NOT NULL DEFAULT FALSE' },
       { name: 'phoneVerified', definition: 'BOOLEAN NOT NULL DEFAULT FALSE' },
@@ -309,7 +309,7 @@ export class Database {
         verified BOOLEAN NOT NULL DEFAULT FALSE,
         verificationLevel VARCHAR(20) NOT NULL DEFAULT 'unverified',
         verificationBadgeType VARCHAR(30) NULL DEFAULT NULL,
-        verificationRequestStatus VARCHAR(20) NOT NULL DEFAULT 'pending',
+        verificationRequestStatus VARCHAR(20) NOT NULL DEFAULT 'unrequested',
         verificationFee DECIMAL(12,2) NOT NULL DEFAULT 0,
         emailVerified BOOLEAN NOT NULL DEFAULT FALSE,
         phoneVerified BOOLEAN NOT NULL DEFAULT FALSE,
@@ -501,7 +501,7 @@ export class Database {
       verified: Boolean(row.verified),
       verificationLevel: row.verificationLevel,
       verificationBadgeType: row.verificationBadgeType || undefined,
-      verificationRequestStatus: row.verificationRequestStatus || 'pending',
+      verificationRequestStatus: row.verificationRequestStatus || 'unrequested',
       verificationFee: row.verificationFee !== null && row.verificationFee !== undefined ? Number(row.verificationFee) : 0,
       emailVerified: Boolean(row.emailVerified),
       phoneVerified: Boolean(row.phoneVerified),
@@ -639,7 +639,7 @@ export class Database {
         user.verified ? 1 : 0,
         user.verificationLevel,
         user.verificationBadgeType || null,
-        user.verificationRequestStatus || 'pending',
+        user.verificationRequestStatus || 'unrequested',
         user.verificationFee ?? 0,
         user.emailVerified ? 1 : 0,
         user.phoneVerified ? 1 : 0,
@@ -688,7 +688,7 @@ export class Database {
         merged.verified ? 1 : 0,
         merged.verificationLevel,
         merged.verificationBadgeType || null,
-        merged.verificationRequestStatus || 'pending',
+        merged.verificationRequestStatus || 'unrequested',
         merged.verificationFee ?? 0,
         merged.emailVerified ? 1 : 0,
         merged.phoneVerified ? 1 : 0,
