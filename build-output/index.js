@@ -552,12 +552,16 @@ app.get('/api/listings/:id', asyncHandler(async (req, res) => {
     res.json(listing);
 }));
 app.post('/api/listings', optionalAuth, asyncHandler(async (req, res) => {
+    const startTime = Date.now();
+    console.log('[POST /api/listings] Request started');
     const { sellerId, sellerName, title, description, price, category, location, images } = req.body;
     if (!sellerId || !sellerName || !title || !description || !price || !category || !location) {
+        console.log('[POST /api/listings] Missing fields validation failed');
         return res.status(400).json({ error: 'Missing listing fields' });
     }
     // If the request is authenticated, ensure the seller matches the token
     if (req.userId && sellerId !== req.userId) {
+        console.log('[POST /api/listings] Authorization check failed');
         return res.status(403).json({ error: 'Unauthorized' });
     }
     const listing = {
@@ -573,7 +577,10 @@ app.post('/api/listings', optionalAuth, asyncHandler(async (req, res) => {
         createdAt: new Date().toISOString(),
         updatedAt: new Date().toISOString(),
     };
+    console.log('[POST /api/listings] Adding listing to database...');
     await db.addListing(listing);
+    const duration = Date.now() - startTime;
+    console.log(`[POST /api/listings] Listing created successfully in ${duration}ms`);
     res.status(201).json(listing);
 }));
 app.get('/api/listings/seller/:sellerId', asyncHandler(async (req, res) => {
@@ -581,11 +588,15 @@ app.get('/api/listings/seller/:sellerId', asyncHandler(async (req, res) => {
     res.json(listings);
 }));
 app.put('/api/listings/:id', verifyAuthToken, asyncHandler(async (req, res) => {
+    const startTime = Date.now();
+    console.log(`[PUT /api/listings/${req.params.id}] Request started`);
     const listing = await db.getListing(req.params.id);
     if (!listing) {
+        console.log(`[PUT /api/listings/${req.params.id}] Listing not found`);
         return res.status(404).json({ error: 'Listing not found' });
     }
     if (listing.sellerId !== req.userId && req.user?.role !== 'admin') {
+        console.log(`[PUT /api/listings/${req.params.id}] Authorization check failed`);
         return res.status(403).json({ error: 'Unauthorized' });
     }
     const allowedUpdates = {};
@@ -593,10 +604,14 @@ app.put('/api/listings/:id', verifyAuthToken, asyncHandler(async (req, res) => {
         if (req.body[field] !== undefined)
             allowedUpdates[field] = req.body[field];
     }
+    console.log(`[PUT /api/listings/${req.params.id}] Updating listing...`);
     const updated = await db.updateListing(req.params.id, allowedUpdates);
     if (!updated) {
+        console.log(`[PUT /api/listings/${req.params.id}] Update failed`);
         return res.status(500).json({ error: 'Unable to update listing' });
     }
+    const duration = Date.now() - startTime;
+    console.log(`[PUT /api/listings/${req.params.id}] Listing updated successfully in ${duration}ms`);
     res.json(updated);
 }));
 app.delete('/api/listings/:id', verifyAuthToken, asyncHandler(async (req, res) => {
