@@ -913,26 +913,49 @@ export class Database {
   }
 
   async addListing(listing: Listing): Promise<Listing> {
+    const originalPrice = Number(listing.originalPrice ?? listing.price ?? 0);
+    const discountPercentage = Number(listing.discountPercentage ?? 0);
+    const discountEnabled = Boolean(listing.discountEnabled && originalPrice > 0 && discountPercentage > 0 && discountPercentage <= 90);
+    const discountAmount = discountEnabled ? Number((originalPrice * discountPercentage / 100).toFixed(2)) : 0;
+    const finalPrice = Number((discountEnabled ? originalPrice - discountAmount : originalPrice).toFixed(2));
+    
+    const normalized: Listing = {
+      ...listing,
+      price: finalPrice,
+      originalPrice: originalPrice || listing.price,
+      discountEnabled,
+      discountPercentage: discountEnabled ? discountPercentage : 0,
+      discountAmount,
+      finalPrice,
+    };
+
     await this.execute(
-      `INSERT INTO listings (id, sellerId, sellerName, title, description, price, category, location, images, rating, reviewCount, distance, createdAt, updatedAt) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
+      `INSERT INTO listings (id, sellerId, sellerName, title, description, price, originalPrice, discountEnabled, discountPercentage, discountAmount, finalPrice, discountStartDate, discountEndDate, category, location, images, rating, reviewCount, distance, createdAt, updatedAt) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
       [
-        listing.id,
-        listing.sellerId,
-        listing.sellerName,
-        listing.title,
-        listing.description,
-        listing.price,
-        listing.category,
-        this.stringifyJson(listing.location),
-        this.stringifyJson(listing.images),
-        listing.rating ?? null,
-        listing.reviewCount ?? null,
-        listing.distance ?? null,
-        this.toSqlDateTime(listing.createdAt),
-        this.toSqlDateTime(listing.updatedAt),
+        normalized.id,
+        normalized.sellerId,
+        normalized.sellerName,
+        normalized.title,
+        normalized.description,
+        normalized.price,
+        normalized.originalPrice,
+        normalized.discountEnabled ? 1 : 0,
+        normalized.discountPercentage ?? 0,
+        normalized.discountAmount ?? 0,
+        normalized.finalPrice,
+        normalized.discountStartDate || null,
+        normalized.discountEndDate || null,
+        normalized.category,
+        this.stringifyJson(normalized.location),
+        this.stringifyJson(normalized.images),
+        normalized.rating ?? null,
+        normalized.reviewCount ?? null,
+        normalized.distance ?? null,
+        this.toSqlDateTime(normalized.createdAt),
+        this.toSqlDateTime(normalized.updatedAt),
       ]
     );
-    return listing;
+    return normalized;
   }
 
   async getListing(id: string): Promise<Listing | undefined> {
@@ -1041,29 +1064,45 @@ export class Database {
   }
 
   async addOrder(order: Order): Promise<Order> {
+    const normalized: Order = {
+      ...order,
+      originalPrice: order.originalPrice ?? order.price,
+      discountPercentage: order.discountPercentage ?? 0,
+      discountAmount: order.discountAmount ?? 0,
+      finalPrice: order.finalPrice ?? order.price,
+      totalAmount: order.totalAmount ?? order.price,
+      quantity: order.quantity ?? 1,
+    };
+
     await this.execute(
-      `INSERT INTO orders (id, listingId, listingTitle, buyerId, buyerName, sellerId, sellerName, price, status, paymentStatus, paymentLockedAt, deliveryDetails, confirmationDeadline, createdAt, updatedAt, notes, transactionIds) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
+      `INSERT INTO orders (id, listingId, listingTitle, buyerId, buyerName, sellerId, sellerName, price, originalPrice, discountPercentage, discountAmount, finalPrice, quantity, totalAmount, status, paymentStatus, paymentLockedAt, deliveryDetails, confirmationDeadline, createdAt, updatedAt, notes, transactionIds) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
       [
-        order.id,
-        order.listingId,
-        order.listingTitle,
-        order.buyerId,
-        order.buyerName,
-        order.sellerId,
-        order.sellerName,
-        order.price,
-        order.status,
-        order.paymentStatus,
-        this.toSqlDateTime(order.paymentLockedAt),
-        this.stringifyJson(order.deliveryDetails),
-        this.toSqlDateTime(order.confirmationDeadline),
-        this.toSqlDateTime(order.createdAt),
-        this.toSqlDateTime(order.updatedAt),
-        order.notes || null,
-        this.stringifyJson(order.transactionIds),
+        normalized.id,
+        normalized.listingId,
+        normalized.listingTitle,
+        normalized.buyerId,
+        normalized.buyerName,
+        normalized.sellerId,
+        normalized.sellerName,
+        normalized.price,
+        normalized.originalPrice,
+        normalized.discountPercentage ?? 0,
+        normalized.discountAmount ?? 0,
+        normalized.finalPrice,
+        normalized.quantity ?? 1,
+        normalized.totalAmount,
+        normalized.status,
+        normalized.paymentStatus,
+        this.toSqlDateTime(normalized.paymentLockedAt),
+        this.stringifyJson(normalized.deliveryDetails),
+        this.toSqlDateTime(normalized.confirmationDeadline),
+        this.toSqlDateTime(normalized.createdAt),
+        this.toSqlDateTime(normalized.updatedAt),
+        normalized.notes || null,
+        this.stringifyJson(normalized.transactionIds),
       ]
     );
-    return order;
+    return normalized;
   }
 
   async getOrder(id: string): Promise<Order | undefined> {

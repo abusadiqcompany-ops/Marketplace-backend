@@ -364,12 +364,14 @@ export class OrderService {
     const walletService = new WalletService();
     const wallet = await walletService.getOrCreateWallet(userId);
 
-    if (wallet.balance < order.price) {
+    // Use finalPrice (discounted price) if available, otherwise use price
+    const saleAmount = Number(order.finalPrice ?? order.price ?? 0);
+    if (wallet.balance < saleAmount) {
       throw new Error('Insufficient wallet balance');
     }
 
     await db.updateWallet(userId, {
-      balance: wallet.balance - order.price,
+      balance: wallet.balance - saleAmount,
     });
     await walletService.syncWalletBalanceToUser(userId);
 
@@ -379,7 +381,7 @@ export class OrderService {
       userId,
       counterpartyId: order.sellerId,
       orderId,
-      amount: order.price,
+      amount: saleAmount,
       status: 'completed',
       currency: 'NGN',
       paymentGateway: 'manual',
@@ -505,8 +507,10 @@ export class OrderService {
     const sellerWallet = await walletService.getOrCreateWallet(order.sellerId);
     const adminWallet = await walletService.getOrCreateWallet(admin.id);
 
-    const adminFee = Math.round(order.price * 0.03 * 100) / 100;
-    const sellerAmount = Math.round((order.price - adminFee) * 100) / 100;
+    // Use finalPrice (discounted price) if available, otherwise use price
+    const saleAmount = Number(order.finalPrice ?? order.price ?? 0);
+    const adminFee = Math.round(saleAmount * 0.03 * 100) / 100;
+    const sellerAmount = Math.round((saleAmount - adminFee) * 100) / 100;
 
     const sellerTransaction: Transaction = {
       id: uuidv4(),
@@ -619,12 +623,13 @@ export class OrderService {
 
     // If payment was locked, refund it
     if (order.paymentStatus === 'completed') {
+      const saleAmount = Number(order.finalPrice ?? order.price ?? 0);
       refundTransaction = {
         id: uuidv4(),
         type: 'refund',
         userId: order.buyerId,
         orderId,
-        amount: order.price,
+        amount: saleAmount,
         status: 'completed',
         currency: 'NGN',
         createdAt: new Date().toISOString(),
@@ -638,7 +643,7 @@ export class OrderService {
       const walletService = new WalletService();
       const buyerWallet = await walletService.getOrCreateWallet(order.buyerId);
       await db.updateWallet(order.buyerId, {
-        balance: buyerWallet.balance + order.price,
+        balance: buyerWallet.balance + saleAmount,
       });
       await walletService.syncWalletBalanceToUser(order.buyerId);
     }
