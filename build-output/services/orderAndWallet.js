@@ -190,7 +190,8 @@ export class OrderService {
     /**
      * Create an order (buyer initiates purchase)
      */
-    async createOrder(listingId, buyerId, buyerName, sellerId, sellerName, price, listingTitle) {
+    async createOrder(listingId, buyerId, buyerName, sellerId, sellerName, price, listingTitle, options) {
+        const salePrice = Number(options?.finalPrice ?? options?.discountEnabled ? (options?.originalPrice ?? price) - (options?.discountAmount ?? 0) : price ?? 0);
         const order = {
             id: uuidv4(),
             listingId,
@@ -199,7 +200,14 @@ export class OrderService {
             buyerName,
             sellerId,
             sellerName,
-            price,
+            price: salePrice,
+            originalPrice: Number(options?.originalPrice ?? price ?? 0),
+            discountEnabled: options?.discountEnabled ? Boolean(options.discountEnabled) : false,
+            discountPercentage: Number(options?.discountPercentage ?? 0),
+            discountAmount: Number(options?.discountAmount ?? 0),
+            finalPrice: Number(options?.finalPrice ?? salePrice ?? 0),
+            quantity: options?.quantity ?? 1,
+            totalAmount: Number(options?.totalAmount ?? salePrice * (options?.quantity ?? 1)),
             status: 'pending',
             paymentStatus: 'pending',
             confirmationDeadline: new Date(Date.now() + 48 * 60 * 60 * 1000).toISOString(),

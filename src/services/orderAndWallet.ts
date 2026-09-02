@@ -249,8 +249,18 @@ export class OrderService {
     sellerId: string,
     sellerName: string,
     price: number,
-    listingTitle: string
+    listingTitle: string,
+    options?: {
+      originalPrice?: number;
+      discountEnabled?: boolean;
+      discountPercentage?: number;
+      discountAmount?: number;
+      finalPrice?: number;
+      quantity?: number;
+      totalAmount?: number;
+    }
   ): Promise<Order> {
+    const salePrice = Number(options?.finalPrice ?? options?.discountEnabled ? (options?.originalPrice ?? price) - (options?.discountAmount ?? 0) : price ?? 0);
     const order: Order = {
       id: uuidv4(),
       listingId,
@@ -259,7 +269,14 @@ export class OrderService {
       buyerName,
       sellerId,
       sellerName,
-      price,
+      price: salePrice,
+      originalPrice: Number(options?.originalPrice ?? price ?? 0),
+      discountEnabled: options?.discountEnabled ? Boolean(options.discountEnabled) : false,
+      discountPercentage: Number(options?.discountPercentage ?? 0),
+      discountAmount: Number(options?.discountAmount ?? 0),
+      finalPrice: Number(options?.finalPrice ?? salePrice ?? 0),
+      quantity: options?.quantity ?? 1,
+      totalAmount: Number(options?.totalAmount ?? salePrice * (options?.quantity ?? 1)),
       status: 'pending',
       paymentStatus: 'pending',
       confirmationDeadline: new Date(

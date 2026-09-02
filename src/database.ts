@@ -77,6 +77,13 @@ export interface Listing {
   title: string;
   description: string;
   price: number;
+  originalPrice?: number;
+  discountEnabled?: boolean;
+  discountPercentage?: number;
+  discountAmount?: number;
+  finalPrice?: number;
+  discountStartDate?: string;
+  discountEndDate?: string;
   category: string;
   location: Location;
   images: string[];
@@ -96,6 +103,13 @@ export interface Order {
   sellerId: string;
   sellerName: string;
   price: number;
+  originalPrice?: number;
+  discountEnabled?: boolean;
+  discountPercentage?: number;
+  discountAmount?: number;
+  finalPrice?: number;
+  quantity?: number;
+  totalAmount?: number;
   status: OrderStatus;
   paymentStatus: PaymentStatus;
   paymentLockedAt?: string;
@@ -286,6 +300,51 @@ export class Database {
     }
   }
 
+  private async ensureListingDiscountColumns(): Promise<void> {
+    const requiredColumns = [
+      { name: 'originalPrice', definition: 'DECIMAL(12,2) NOT NULL DEFAULT 0' },
+      { name: 'discountEnabled', definition: 'BOOLEAN NOT NULL DEFAULT FALSE' },
+      { name: 'discountPercentage', definition: 'DECIMAL(5,2) NOT NULL DEFAULT 0' },
+      { name: 'discountAmount', definition: 'DECIMAL(12,2) NOT NULL DEFAULT 0' },
+      { name: 'finalPrice', definition: 'DECIMAL(12,2) NOT NULL DEFAULT 0' },
+      { name: 'discountStartDate', definition: 'TIMESTAMP NULL' },
+      { name: 'discountEndDate', definition: 'TIMESTAMP NULL' },
+    ];
+
+    for (const column of requiredColumns) {
+      const [rows] = await this.pool.query<RowDataPacket[]>(
+        'SELECT COLUMN_NAME FROM INFORMATION_SCHEMA.COLUMNS WHERE TABLE_SCHEMA = DATABASE() AND TABLE_NAME = ? AND COLUMN_NAME = ?',
+        ['listings', column.name]
+      );
+
+      if (!rows.length) {
+        await this.pool.query(`ALTER TABLE listings ADD COLUMN ${column.name} ${column.definition}`);
+      }
+    }
+  }
+
+  private async ensureOrderDiscountColumns(): Promise<void> {
+    const requiredColumns = [
+      { name: 'originalPrice', definition: 'DECIMAL(12,2) NOT NULL DEFAULT 0' },
+      { name: 'discountPercentage', definition: 'DECIMAL(5,2) NOT NULL DEFAULT 0' },
+      { name: 'discountAmount', definition: 'DECIMAL(12,2) NOT NULL DEFAULT 0' },
+      { name: 'finalPrice', definition: 'DECIMAL(12,2) NOT NULL DEFAULT 0' },
+      { name: 'quantity', definition: 'INT NOT NULL DEFAULT 1' },
+      { name: 'totalAmount', definition: 'DECIMAL(12,2) NOT NULL DEFAULT 0' },
+    ];
+
+    for (const column of requiredColumns) {
+      const [rows] = await this.pool.query<RowDataPacket[]>(
+        'SELECT COLUMN_NAME FROM INFORMATION_SCHEMA.COLUMNS WHERE TABLE_SCHEMA = DATABASE() AND TABLE_NAME = ? AND COLUMN_NAME = ?',
+        ['orders', column.name]
+      );
+
+      if (!rows.length) {
+        await this.pool.query(`ALTER TABLE orders ADD COLUMN ${column.name} ${column.definition}`);
+      }
+    }
+  }
+
   async init(): Promise<void> {
     if (this.initialized) return;
 
@@ -332,6 +391,13 @@ export class Database {
         title VARCHAR(255) NOT NULL,
         description TEXT NOT NULL,
         price DECIMAL(12,2) NOT NULL,
+        originalPrice DECIMAL(12,2) NOT NULL DEFAULT 0,
+        discountEnabled BOOLEAN NOT NULL DEFAULT FALSE,
+        discountPercentage DECIMAL(5,2) NOT NULL DEFAULT 0,
+        discountAmount DECIMAL(12,2) NOT NULL DEFAULT 0,
+        finalPrice DECIMAL(12,2) NOT NULL DEFAULT 0,
+        discountStartDate TIMESTAMP NULL,
+        discountEndDate TIMESTAMP NULL,
         category VARCHAR(100) NOT NULL,
         location JSON NOT NULL,
         images JSON NOT NULL,
@@ -342,6 +408,7 @@ export class Database {
         updatedAt TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP
       )
     `);
+    await this.ensureListingDiscountColumns();
 
     await this.pool.query(`
       CREATE TABLE IF NOT EXISTS reports (
@@ -385,6 +452,12 @@ export class Database {
         sellerId VARCHAR(36) NOT NULL,
         sellerName VARCHAR(255) NOT NULL,
         price DECIMAL(12,2) NOT NULL,
+        originalPrice DECIMAL(12,2) NOT NULL DEFAULT 0,
+        discountPercentage DECIMAL(5,2) NOT NULL DEFAULT 0,
+        discountAmount DECIMAL(12,2) NOT NULL DEFAULT 0,
+        finalPrice DECIMAL(12,2) NOT NULL DEFAULT 0,
+        quantity INT NOT NULL DEFAULT 1,
+        totalAmount DECIMAL(12,2) NOT NULL DEFAULT 0,
         status VARCHAR(50) NOT NULL,
         paymentStatus VARCHAR(50) NOT NULL,
         paymentLockedAt TIMESTAMP NULL,
@@ -396,6 +469,7 @@ export class Database {
         transactionIds JSON NULL
       )
     `);
+    await this.ensureOrderDiscountColumns();
 
     await this.pool.query(`
       CREATE TABLE IF NOT EXISTS transactions (
@@ -514,13 +588,27 @@ export class Database {
   }
 
   private toListing(row: any): Listing {
+    const originalPrice = Number(row.originalPrice ?? row.original_price ?? row.price ?? 0);
+    const price = Number(row.price ?? row.finalPrice ?? row.final_price ?? originalPrice ?? 0);
+    const discountPercentage = Number(row.discountPercentage ?? row.discount_percentage ?? 0);
+    const discountAmount = Number(row.discountAmount ?? row.discount_amount ?? 0);
+    const finalPrice = Number(row.finalPrice ?? row.final_price ?? price ?? 0);
+    const discountEnabled = Boolean(row.discountEnabled ?? row.discount_enabled ?? (discountPercentage > 0 && finalPrice < originalPrice));
+
     return {
       id: row.id,
       sellerId: row.sellerId,
       sellerName: row.sellerName,
       title: row.title,
       description: row.description,
-      price: Number(row.price || 0),
+      price,
+      originalPrice: originalPrice || undefined,
+      discountEnabled,
+      discountPercentage: discountEnabled ? discountPercentage : 0,
+      discountAmount: discountEnabled ? discountAmount : 0,
+      finalPrice: finalPrice || undefined,
+      discountStartDate: row.discountStartDate || row.discount_start_date || undefined,
+      discountEndDate: row.discountEndDate || row.discount_end_date || undefined,
       category: row.category,
       location: this.parseJson<Location>(row.location) || { city: '', state: '', country: '' },
       images: this.parseJson<string[]>(row.images) || [],
@@ -533,6 +621,11 @@ export class Database {
   }
 
   private toOrder(row: any): Order {
+    const orderPrice = Number(row.price || 0);
+    const originalPrice = Number(row.originalPrice ?? row.original_price ?? orderPrice ?? 0);
+    const discountAmount = Number(row.discountAmount ?? row.discount_amount ?? 0);
+    const finalPrice = Number(row.finalPrice ?? row.final_price ?? orderPrice ?? 0);
+
     return {
       id: row.id,
       listingId: row.listingId,
@@ -541,7 +634,13 @@ export class Database {
       buyerName: row.buyerName,
       sellerId: row.sellerId,
       sellerName: row.sellerName,
-      price: Number(row.price || 0),
+      price: orderPrice,
+      originalPrice: originalPrice || undefined,
+      discountPercentage: row.discountPercentage !== undefined ? Number(row.discountPercentage) : undefined,
+      discountAmount: discountAmount || undefined,
+      finalPrice: finalPrice || undefined,
+      quantity: row.quantity !== undefined ? Number(row.quantity) : undefined,
+      totalAmount: row.totalAmount !== undefined ? Number(row.totalAmount) : undefined,
       status: row.status,
       paymentStatus: row.paymentStatus,
       paymentLockedAt: this.fromSqlDateTime(row.paymentLockedAt) || undefined,
@@ -855,15 +954,40 @@ export class Database {
     const existing = await this.getListing(id);
     if (!existing) return undefined;
 
-    const merged = { ...existing, ...updates, updatedAt: new Date().toISOString() };
+    const normalizedPrice = Number(updates.originalPrice ?? updates.price ?? existing.originalPrice ?? existing.price ?? 0);
+    const normalizedPercentage = Number(updates.discountPercentage ?? existing.discountPercentage ?? 0);
+    const discountEnabled = Boolean(updates.discountEnabled ?? existing.discountEnabled ?? (normalizedPercentage > 0));
+    const hasValidDiscount = discountEnabled && normalizedPercentage > 0 && normalizedPercentage <= 90;
+    const finalPrice = hasValidDiscount ? Number((normalizedPrice - normalizedPrice * normalizedPercentage / 100).toFixed(2)) : normalizedPrice;
+    const merged: Listing = {
+      ...existing,
+      ...updates,
+      price: finalPrice,
+      originalPrice: normalizedPrice || existing.originalPrice || existing.price,
+      discountEnabled: hasValidDiscount,
+      discountPercentage: hasValidDiscount ? normalizedPercentage : 0,
+      discountAmount: hasValidDiscount ? Number((normalizedPrice * normalizedPercentage / 100).toFixed(2)) : 0,
+      finalPrice,
+      discountStartDate: updates.discountStartDate ?? existing.discountStartDate,
+      discountEndDate: updates.discountEndDate ?? existing.discountEndDate,
+      updatedAt: new Date().toISOString(),
+    };
+
     await this.execute(
-      `UPDATE listings SET sellerId = ?, sellerName = ?, title = ?, description = ?, price = ?, category = ?, location = ?, images = ?, rating = ?, reviewCount = ?, distance = ?, updatedAt = ? WHERE id = ?`,
+      `UPDATE listings SET sellerId = ?, sellerName = ?, title = ?, description = ?, price = ?, originalPrice = ?, discountEnabled = ?, discountPercentage = ?, discountAmount = ?, finalPrice = ?, discountStartDate = ?, discountEndDate = ?, category = ?, location = ?, images = ?, rating = ?, reviewCount = ?, distance = ?, updatedAt = ? WHERE id = ?`,
       [
         merged.sellerId,
         merged.sellerName,
         merged.title,
         merged.description,
         merged.price,
+        merged.originalPrice ?? merged.price,
+        merged.discountEnabled ? 1 : 0,
+        merged.discountPercentage ?? 0,
+        merged.discountAmount ?? 0,
+        merged.finalPrice ?? merged.price,
+        merged.discountStartDate || null,
+        merged.discountEndDate || null,
         merged.category,
         this.stringifyJson(merged.location),
         this.stringifyJson(merged.images),
@@ -966,9 +1090,19 @@ export class Database {
     const existing = await this.getOrder(id);
     if (!existing) return undefined;
 
-    const merged = { ...existing, ...updates, updatedAt: new Date().toISOString() };
+    const merged: Order = {
+      ...existing,
+      ...updates,
+      originalPrice: updates.originalPrice ?? existing.originalPrice ?? existing.price,
+      discountPercentage: updates.discountPercentage ?? existing.discountPercentage ?? 0,
+      discountAmount: updates.discountAmount ?? existing.discountAmount ?? 0,
+      finalPrice: updates.finalPrice ?? existing.finalPrice ?? existing.price,
+      totalAmount: updates.totalAmount ?? existing.totalAmount ?? existing.price,
+      updatedAt: new Date().toISOString(),
+    };
+
     await this.execute(
-      `UPDATE orders SET listingId = ?, listingTitle = ?, buyerId = ?, buyerName = ?, sellerId = ?, sellerName = ?, price = ?, status = ?, paymentStatus = ?, paymentLockedAt = ?, deliveryDetails = ?, confirmationDeadline = ?, notes = ?, transactionIds = ?, updatedAt = ? WHERE id = ?`,
+      `UPDATE orders SET listingId = ?, listingTitle = ?, buyerId = ?, buyerName = ?, sellerId = ?, sellerName = ?, price = ?, originalPrice = ?, discountPercentage = ?, discountAmount = ?, finalPrice = ?, quantity = ?, totalAmount = ?, status = ?, paymentStatus = ?, paymentLockedAt = ?, deliveryDetails = ?, confirmationDeadline = ?, notes = ?, transactionIds = ?, updatedAt = ? WHERE id = ?`,
       [
         merged.listingId,
         merged.listingTitle,
@@ -977,6 +1111,12 @@ export class Database {
         merged.sellerId,
         merged.sellerName,
         merged.price,
+        merged.originalPrice ?? merged.price,
+        merged.discountPercentage ?? 0,
+        merged.discountAmount ?? 0,
+        merged.finalPrice ?? merged.price,
+        merged.quantity ?? 1,
+        merged.totalAmount ?? merged.price,
         merged.status,
         merged.paymentStatus,
         this.toSqlDateTime(merged.paymentLockedAt),

@@ -58,6 +58,13 @@ export interface Listing {
     title: string;
     description: string;
     price: number;
+    originalPrice?: number;
+    discountEnabled?: boolean;
+    discountPercentage?: number;
+    discountAmount?: number;
+    finalPrice?: number;
+    discountStartDate?: string;
+    discountEndDate?: string;
     category: string;
     location: Location;
     images: string[];
@@ -76,6 +83,13 @@ export interface Order {
     sellerId: string;
     sellerName: string;
     price: number;
+    originalPrice?: number;
+    discountEnabled?: boolean;
+    discountPercentage?: number;
+    discountAmount?: number;
+    finalPrice?: number;
+    quantity?: number;
+    totalAmount?: number;
     status: OrderStatus;
     paymentStatus: PaymentStatus;
     paymentLockedAt?: string;
@@ -150,6 +164,8 @@ export declare class Database {
     private ensureUserVerificationColumns;
     private ensureAvatarColumnType;
     private ensureUniqueIndex;
+    private ensureListingDiscountColumns;
+    private ensureOrderDiscountColumns;
     init(): Promise<void>;
     close(): Promise<void>;
     private select;

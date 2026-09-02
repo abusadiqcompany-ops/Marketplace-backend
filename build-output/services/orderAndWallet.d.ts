@@ -35,7 +35,15 @@ export declare class OrderService {
     /**
      * Create an order (buyer initiates purchase)
      */
-    createOrder(listingId: string, buyerId: string, buyerName: string, sellerId: string, sellerName: string, price: number, listingTitle: string): Promise<Order>;
+    createOrder(listingId: string, buyerId: string, buyerName: string, sellerId: string, sellerName: string, price: number, listingTitle: string, options?: {
+        originalPrice?: number;
+        discountEnabled?: boolean;
+        discountPercentage?: number;
+        discountAmount?: number;
+        finalPrice?: number;
+        quantity?: number;
+        totalAmount?: number;
+    }): Promise<Order>;
     /**
      * Lock payment (buyer pays, money goes to escrow)
      */

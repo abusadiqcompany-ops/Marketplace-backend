@@ -554,11 +554,17 @@ app.get('/api/listings/:id', asyncHandler(async (req, res) => {
 app.post('/api/listings', optionalAuth, asyncHandler(async (req, res) => {
     const startTime = Date.now();
     console.log('[POST /api/listings] Request started');
-    const { sellerId, sellerName, title, description, price, category, location, images } = req.body;
+    const { sellerId, sellerName, title, description, price, originalPrice, discountEnabled, discountPercentage, category, location, images } = req.body;
     if (!sellerId || !sellerName || !title || !description || !price || !category || !location) {
         console.log('[POST /api/listings] Missing fields validation failed');
         return res.status(400).json({ error: 'Missing listing fields' });
     }
+    const numericPrice = Number(price);
+    const numericOriginalPrice = Number(originalPrice ?? price ?? 0);
+    const numericDiscountPercentage = Number(discountPercentage ?? 0);
+    const validDiscountEnabled = Boolean(discountEnabled) && numericOriginalPrice > 0 && numericDiscountPercentage > 0 && numericDiscountPercentage <= 90;
+    const discountAmount = validDiscountEnabled ? Number((numericOriginalPrice * numericDiscountPercentage / 100).toFixed(2)) : 0;
+    const finalPrice = Number((validDiscountEnabled ? numericOriginalPrice - discountAmount : numericOriginalPrice).toFixed(2));
     // If the request is authenticated, ensure the seller matches the token
     if (req.userId && sellerId !== req.userId) {
         console.log('[POST /api/listings] Authorization check failed');
@@ -570,7 +576,12 @@ app.post('/api/listings', optionalAuth, asyncHandler(async (req, res) => {
         sellerName,
         title,
         description,
-        price,
+        price: finalPrice,
+        originalPrice: numericOriginalPrice || undefined,
+        discountEnabled: validDiscountEnabled,
+        discountPercentage: validDiscountEnabled ? numericDiscountPercentage : 0,
+        discountAmount,
+        finalPrice,
         category,
         location,
         images: images || [],
@@ -600,7 +611,7 @@ app.put('/api/listings/:id', verifyAuthToken, asyncHandler(async (req, res) => {
         return res.status(403).json({ error: 'Unauthorized' });
     }
     const allowedUpdates = {};
-    for (const field of ['sellerName', 'title', 'description', 'price', 'category', 'location', 'images']) {
+    for (const field of ['sellerName', 'title', 'description', 'price', 'originalPrice', 'discountEnabled', 'discountPercentage', 'discountAmount', 'finalPrice', 'category', 'location', 'images']) {
         if (req.body[field] !== undefined)
             allowedUpdates[field] = req.body[field];
     }
@@ -1103,11 +1114,19 @@ app.post('/api/deposit/verify', verifyAuthToken, asyncHandler(async (req, res) =
 }));
 // ============== ORDER ROUTES ==============
 app.post('/api/orders', verifyAuthToken, asyncHandler(async (req, res) => {
-    const { listingId, buyerId, buyerName, sellerId, sellerName, price, listingTitle } = req.body;
+    const { listingId, buyerId, buyerName, sellerId, sellerName, price, listingTitle, originalPrice, discountEnabled, discountPercentage, discountAmount, finalPrice, quantity, totalAmount } = req.body;
     if (buyerId !== req.userId) {
         return res.status(403).json({ error: 'Unauthorized' });
     }
-    const order = await orderService.createOrder(listingId, buyerId, buyerName, sellerId, sellerName, price, listingTitle);
+    const order = await orderService.createOrder(listingId, buyerId, buyerName, sellerId, sellerName, Number(price ?? 0), listingTitle, {
+        originalPrice: Number(originalPrice ?? price ?? 0),
+        discountEnabled: Boolean(discountEnabled),
+        discountPercentage: Number(discountPercentage ?? 0),
+        discountAmount: Number(discountAmount ?? 0),
+        finalPrice: Number(finalPrice ?? price ?? 0),
+        quantity: Number(quantity ?? 1),
+        totalAmount: Number(totalAmount ?? Number(price ?? 0) * Number(quantity ?? 1)),
+    });
     res.status(201).json(order);
 }));
 app.get('/api/orders/:id', verifyAuthToken, asyncHandler(async (req, res) => {
